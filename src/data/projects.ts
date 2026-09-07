@@ -16,7 +16,7 @@ export const projects: Project[] = [
     title: "Cephalon",
     description:
       "Cephalon is a local-first desktop RAG app for running LLM inference on document collections. It imports PDFs, Office documents, spreadsheets, text files, and structured data into a transparent hybrid retrieval pipeline combining LanceDB semantic search, SQLite FTS5 keyword search, reciprocal-rank fusion, and full-set listwise reranking.\n\nCephalon preserves exact source provenance such as PDF pages, layout, tables, captions, and bounding boxes. It validates evidence and claim coverage before returning answers with stable citations, retrieval traces, confidence diagnostics, and fail-safe no-answer behaviour.\n\nConnect your own locally running llama.cpp chat model while keeping documents, indexes, metadata, telemetry, and chat history on your computer. Cephalon is particularly useful with models fine-tuned for specialised knowledge domains, tasks, writing styles, programming conventions, academic subjects, accessibility preferences, or creative work.",
-    tech: ["TypeScript", "Python", "Rust", "Tauri", "React", "LanceDB", "SQLite", "llama.cpp", "Transformers"],
+    tech: ["TypeScript", "Python", "Rust", "GPUI-CE", "React", "LanceDB", "SQLite", "llama.cpp", "Transformers"],
     github: "https://github.com/DeSitterUniverse/Cephalon",
   },
   {
