@@ -22,6 +22,7 @@ const { showThemeSelector = true, initialTheme = "dark" } = Astro.props;
     <a href="/#projects">Projects</a>
     <a href="/blog/">Blog</a>
     <a href="/#connect">Contact</a>
+    {showThemeSelector && <a href="#ads-experience" data-enter-spacetime>Enter Anti-de Sitter space</a>}
   </nav>
 
   <div class="rail-links" aria-label="Profile links">
@@ -59,3 +60,16 @@ const { showThemeSelector = true, initialTheme = "dark" } = Astro.props;
     });
   })();
 </script>
+
+<style>
+  [data-enter-spacetime] {color:var(--color-accent-bright);opacity:.4;transition:opacity 180ms ease;}
+  [data-enter-spacetime]:hover,[data-enter-spacetime]:focus-visible {opacity:1;}
+  @media(prefers-reduced-motion:reduce){[data-enter-spacetime]{transition:none;}}
+  @media(max-width:900px){
+    :global(.editorial-rail nav){flex-wrap:wrap;row-gap:6px;min-width:0;}
+    [data-enter-spacetime]{flex-basis:100%;text-align:right;padding-block:8px;}
+  }
+  @media(max-width:620px){
+    :global(.editorial-rail nav){max-width:calc(100vw - 210px);column-gap:10px;}
+  }
+</style>

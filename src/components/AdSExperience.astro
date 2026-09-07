@@ -1,0 +1,48 @@
+<span class="spacetime-status" data-spacetime-status role="status"></span>
+<button class="ads-exit" type="button" data-exit-spacetime hidden>
+  <span aria-hidden="true">×</span> Return to portfolio
+</button>
+
+<div class="ads-stage" data-ads-stage hidden aria-hidden="true">
+  <div class="ads-veil"></div>
+  <canvas id="spacetime-experience-canvas"></canvas>
+  <div class="ads-glyphs" data-ads-glyphs></div>
+</div>
+
+<script>
+  import { initializeAntiDeSitterExperience } from "../scripts/antiDeSitterExperience";
+  let cleanup: (() => void) | undefined;
+  const init = () => { cleanup?.(); cleanup = initializeAntiDeSitterExperience(); };
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});
+  else init();
+  document.addEventListener("astro:page-load",init);
+  document.addEventListener("astro:before-swap",()=>{cleanup?.();cleanup=undefined;});
+</script>
+
+<style>
+  .ads-exit { position:fixed;right:18px;top:18px;z-index:100;min-height:44px;
+    display:flex;align-items:center;gap:10px;padding:10px 15px;
+    border:1px solid #dfc6a460;border-radius:24px;background:#080c12ed;color:#dfc6a4;
+    font:500 .72rem var(--font-mono);cursor:pointer;pointer-events:auto;opacity:1;
+    max-width:calc(100vw - 36px); }
+  .ads-exit span {font:300 23px/1 sans-serif;}
+  .ads-exit:hover {border-color:#dfc6a4;background:#141b24;}
+  .ads-exit[hidden] {display:none;}
+  .ads-exit:focus-visible {outline:2px solid #a6e9ec;outline-offset:4px;}
+  .spacetime-status {
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+    clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+  .ads-stage { position:fixed;inset:0;z-index:90;pointer-events:none;overflow:hidden; }
+  .ads-stage[hidden] { display:none; }
+  .ads-veil { position:absolute;inset:0;background:#080c12;opacity:var(--ads-veil,0); }
+  #spacetime-experience-canvas { position:absolute;inset:0;width:100%;height:100%;z-index:2; }
+  .ads-glyphs { position:absolute;inset:0; }
+  :global(.ads-glyph) {
+    position:absolute;display:block;margin:0;padding:0;border:0;background:transparent;
+    white-space:pre;transform-origin:center;pointer-events:none;
+  }
+  :global(html[data-spacetime-active="true"] ads-source) {
+    color:transparent !important;text-shadow:none !important;text-decoration-color:transparent !important;
+  }
+</style>
