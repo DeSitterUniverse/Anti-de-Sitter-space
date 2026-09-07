@@ -8,38 +8,17 @@ const experiences = [
       {
         title: "Data Engineer",
         team: "Analytics Tools & Data Warehouse",
-        description: "Built and maintained efficient ETL pipelines and data warehouse architectures within an Agile team, ensuring reliable, real-time data delivery.",
-        details: [
-          "Developed ETL pipelines in ADF using Python/Java, processing 300+ entries daily with a 35% efficiency boost.",
-          "Managed Change Data Capture (CDC) via Qlik across Azure Synapse and SQL Server.",
-          "Resolved 96% of production incidents within SLA using ServiceNow.",
-          "Documented 200+ ETL processes in Informatica Cloud and ADF.",
-          "Developed and maintained dashboards to provide stakeholders with real-time visibility into ETL process performance and status",
-        ],
+        description: "Engineered and optimized the data infrastructure behind enterprise analytics workloads, spanning Azure Data Factory, Synapse, SQL Server, and real-time CDC pipelines. Improved ETL throughput by 35% while helping keep hundreds of daily production workflows reliable and observable.",
       },
       {
         title: "Software Engineer",
         team: "Intelligent Automation Team",
-        description: "Engineered intelligent automation solutions and standardized libraries in an Agile environment, significantly increasing process reliability and reducing manual effort.",
-        details: [
-          "Re-designed transactional automation processes, increasing success rates from 30% to 96% and saving 800+ manual hours.",
-          "Developed standardized libraries for metric tracking with 99%+ reliability.",
-          "Managed user roles and configuration as a UiPath Administrator.",
-          "Implemented RPA documentation standards across the enterprise.",
-          "Developed attended and terminal automations using UiPath, C#, .NET and Python; 800+ hours saved",
-        ],
+        description: "Turned fragile enterprise automations into production-grade systems, improving transaction reliability from roughly 30% to 96% and removing 800+ hours of manual effort. Developed reusable automation infrastructure and engineering standards across C#/.NET, Python, and UiPath.",
       },
       {
         title: "RPA Developer",
         team: "eRPA Enterprise",
-        description: "Deployed scalable enterprise RPA solutions using Agile methodologies to streamline workflows, execute large-scale migrations, and track ROI.",
-        details: [
-          "Designed and developed enterprise automations saving 2,900+ manual hours.",
-          "Maintained system compatibility and high success rates during 100,000+ entry migrations.",
-          "Visualized ROI metrics using Kibana dashboards and Elasticsearch.",
-          "Resolved critical errors to ensure process integrity during system updates.",
-          "Managed the end-to-end stakeholder lifecycle for RPA initiatives, translating complex business requirements from senior management into technical specifications while providing regular progress reports and ROI analysis.",
-        ],
+        description: "Built large-scale automation solutions that removed 2,900+ hours of repetitive work and executed migrations of more than 100,000 transactions. Took projects from stakeholder requirements through implementation and production support, with an emphasis on reliability and measurable ROI.",
       },
     ],
   },
@@ -71,10 +50,6 @@ const experiences = [
               <h4>{role.title}</h4>
               <p class="role-team">{role.team}</p>
               <p>{role.description}</p>
-              <details class="editorial-details">
-                <summary>Details</summary>
-                <ul>{role.details.map((detail) => <li>{detail}</li>)}</ul>
-              </details>
             </div>
           )) : (
             <div class="role-row">
