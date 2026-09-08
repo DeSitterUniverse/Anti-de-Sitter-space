@@ -11,6 +11,7 @@
  * horizon; A<0.08 is a near-horizon diagnostic, never an exact horizon claim.
  */
 export interface GravityFrame {
+  tracers?:Float32Array;
   time:number; mass:number; minA:number; peakX:number;
   radius:Float32Array; speed:Float32Array; lapse:Float32Array;
   status:"running"|"concentrated"|"limit"|"invalid";
@@ -102,8 +103,8 @@ export class AdSGravity {
   }
   advance(target:number){while(this.time<target&&this.status==="running")this.step();}
   snapshot(count=256):GravityFrame {
-    // Equal enclosed-energy quantiles: markers visualize scalar energy, not
-    // independent particles. Their angular labels are display-only symmetry.
+    // Equal enclosed-energy quantiles for the renderer's faint matter contours.
+    // Portfolio letters are separate geodesic tracers supplied by the worker.
     const radius=new Float32Array(count),speed=new Float32Array(this.n+1),lapse=new Float32Array(this.a);
     const total=this.mass[this.n]!;let j=1;
     for(let i=0;i<count;i++){

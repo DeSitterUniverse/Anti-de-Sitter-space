@@ -59,7 +59,9 @@ export function createAntiDeSitterRenderer(canvas:HTMLCanvasElement,scene:Scene)
     // Pure H2 reference geometry yields to the backreacting matter profile;
     // it is NOT an exact embedding of the evolving self-gravitating space.
     ctx.strokeStyle=ice;ctx.lineWidth=.65;
-    const meshAlpha=playCenter?0:alpha*.23*(1-smooth(t.tau/1.2));
+    // Exact pure-AdS H² reference curves, NOT geodesics of the backreacting
+    // spatial metric. Keep a quiet reference until physical concentration.
+    const meshAlpha=playCenter?0:alpha*(.045+.185*(1-smooth(t.tau/1.2)))*(1-smooth(t.collapse));
     if(meshAlpha>0){ctx.globalAlpha=meshAlpha;ctx.stroke(mesh);}
     if(!reduced&&!playCenter){
       // Sparse equal-energy contours, not independent decorative waves.

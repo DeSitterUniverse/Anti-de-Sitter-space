@@ -1,10 +1,11 @@
 import { mix, captureAtAperture, type Vec2 } from "./antiDeSitterGeometry";
 import type { GravityFrame } from "./adsGravity";
-import { apertureRadius, displayRadius, liveTimeline, sampleRadial } from "./adsLiveState";
-import { createAntiDeSitterRenderer, createScene, screenPoint, type Scene } from "./antiDeSitterRenderer";
+import { apertureRadius, liveTimeline } from "./adsLiveState";
+import { createAntiDeSitterRenderer, createScene, type Scene } from "./antiDeSitterRenderer";
 import { getActiveTheme, THEME_CHANGE_EVENT } from "./themeController";
 import { createPerformanceController } from "./antiDeSitterPerformance";
-import { startPlayground } from "./adsPlayground";
+import { preparePlayground, startPlayground, type PlaygroundMarker } from "./adsPlayground";
+import { tracerInitialData } from "./adsTracers";
 
 interface Glyph {
   element: HTMLElement;
@@ -12,8 +13,9 @@ interface Glyph {
   fixed: boolean;
   latent?: boolean;
   lastOpacity?: string;
-  quantile?:number;
-  angle?:number;
+  lastTransform?:string;
+  tracerIndex?:number;
+  velocity?:Vec2;
   position?:Vec2;
 }
 interface Source { text: Text; wrapper: HTMLElement }
@@ -31,6 +33,7 @@ interface Run {
   lastFrame: number;
   worker?:Worker;
   playgroundCleanup?:()=>void;
+  preparedControl?:HTMLElement;
 }
 const EXCLUDE = "script,style,noscript,svg,input,select,textarea,option,[data-enter-spacetime],.galaxy-settings";
 const ROOTS = ".editorial-rail, main, #connect,.theme-selector,.text-tone-selector";
@@ -153,6 +156,7 @@ export function initializeAntiDeSitterExperience(doc:Document=document, win:Wind
       ending.abort.abort();
       ending.worker?.terminate();
       ending.playgroundCleanup?.();
+      ending.preparedControl?.remove();
       for(const source of ending.sources)source.wrapper.replaceWith(source.text);
       host.replaceChildren();
       ending.renderer.destroy();
@@ -208,34 +212,65 @@ export function initializeAntiDeSitterExperience(doc:Document=document, win:Wind
       win.addEventListener("keydown",(event)=>{if(event.key==="Escape")finish();},{signal:current.abort.signal});
       doc.addEventListener("visibilitychange",()=>{if(doc.hidden)finish();},{signal:current.abort.signal});
       motion.addEventListener("change",stop,{signal:current.abort.signal});
-      // Every glyph is an equal-energy sample with a fixed angular label.
-      // Hash the rank to separate neighboring letters without inventing forces.
+      // Map the captured whole-document layout into intrinsic initial positions.
+      // Independent finite canonical momenta imply future timelike velocities
+      // through the Hamiltonian; no glyph mass enters the metric solver.
+      const initial=new Float64Array(current.glyphs.length*4);
       for(let i=0;i<current.glyphs.length;i++){
         const g=current.glyphs[i]!;
-        g.quantile=((i*.6180339887498949)%1);
-        g.angle=2*Math.PI*((i*.7548776662466927)%1);
-      }
+        const qx=(g.home.x-scene.home.x)/scene.homeScale.x,qy=(g.home.y-scene.home.y)/scene.homeScale.y;
+        g.tracerIndex=i*4;
+        g.position={x:g.home.x,y:g.home.y};g.velocity={x:0,y:0};
+          initial.set(tracerInitialData(i,qx,qy),i*4);
+        }
+        // Allocate handoff records before animation, not at peak concentration.
+        const playgroundMarkers:PlaygroundMarker[]=current.glyphs.map(g=>({element:g.element,
+          x:g.home.x,y:g.home.y,opacity:g.latent?.45:1,vx:0,vy:0,scale:"scale(1)"}));
+        const prepared=preparePlayground(doc,playgroundMarkers);
+        current.preparedControl=prepared.control;
       current.start=win.performance.now();
       const worker=new Worker(new URL("./adsGravity.worker.ts",import.meta.url),{type:"module"});
       current.worker=worker;
       let latest:GravityFrame|undefined,previous:GravityFrame|undefined,view:GravityFrame|undefined;
+      let queued:GravityFrame|undefined;
       let received=current.start,pending=true,endAt:number|undefined;
-      worker.onmessage=(event:MessageEvent<GravityFrame>)=>{
-        if(run!==current)return;
-        previous=view?{...view,radius:view.radius.slice(),speed:view.speed.slice(),lapse:view.lapse.slice()}:event.data;
-        latest=event.data;
-        view??={...latest,radius:latest.radius.slice(),speed:latest.speed.slice(),lapse:latest.lapse.slice()};
-        pending=false;received=win.performance.now();
+      const promote=(next:GravityFrame,now:number)=>{
+        // Reuse the interpolation origin rather than allocating a full tracer
+        // buffer on every worker reply. Copy current displayed state exactly.
+        if(previous&&view){
+          previous.radius.set(view.radius);previous.speed.set(view.speed);previous.lapse.set(view.lapse);
+          if(previous.tracers&&view.tracers)previous.tracers.set(view.tracers);
+          previous.time=view.time;previous.minA=view.minA;previous.peakX=view.peakX;
+        }else previous=next;
+        latest=next;
+        view??={...latest,radius:latest.radius.slice(),speed:latest.speed.slice(),lapse:latest.lapse.slice(),...(latest.tracers?{tracers:latest.tracers.slice()}:{})};
+        received=now;
         if(latest.status!=="running")endAt??=received+100;
       };
+      worker.onmessage=(event:MessageEvent<GravityFrame>)=>{
+        if(run!==current)return;
+        pending=false;
+        if(!latest)promote(event.data,win.performance.now());
+        else queued=event.data;
+      };
       worker.onerror=()=>finish();
-      worker.postMessage({target:0});
+      worker.postMessage({target:0,initial},[initial.buffer]);
       const performanceController=createPerformanceController(current.start);
       const flux=new Float32Array(96);
       const frame=(now:number)=>{
         if(run!==current)return;
         try {
           const elapsed=now-current.start;
+          if(queued&&now-received>=80){
+            // Finish the previous interval exactly before rotating the single
+            // lookahead slot. Physics is never extrapolated beyond solved data.
+            if(view&&latest){
+              view.radius.set(latest.radius);view.speed.set(latest.speed);view.lapse.set(latest.lapse);
+              if(view.tracers&&latest.tracers)view.tracers.set(latest.tracers);
+              view.time=latest.time;view.minA=latest.minA;view.peakX=latest.peakX;
+            }
+            promote(queued,now);queued=undefined;
+          }
           if(!latest||!previous||!view){
             if(elapsed>5000){finish();return;}
             current.raf=win.requestAnimationFrame(frame);return;
@@ -244,32 +279,21 @@ export function initializeAntiDeSitterExperience(doc:Document=document, win:Wind
           for(const key of ["radius","speed","lapse"] as const){
             for(let i=0;i<view[key].length;i++)view[key][i]=mix(previous[key][i]!,latest[key][i]!,blend);
           }
+          if(view.tracers&&previous.tracers&&latest.tracers){
+            for(let i=0;i<view.tracers.length;i++)view.tracers[i]=mix(previous.tracers[i]!,latest.tracers[i]!,blend);
+          }
           view.time=mix(previous.time,latest.time,blend);
           view.minA=mix(previous.minA,latest.minA,blend);
           view.peakX=mix(previous.peakX,latest.peakX,blend);
           view.mass=latest.mass;view.status=latest.status;
-          if(!pending&&latest.status==="running"&&now-received>=80){
-            pending=true;worker.postMessage({target:Math.max(0,(elapsed-1800)*.36)});
+          if(!pending&&!queued&&latest.status==="running"&&now-received>=40){
+            pending=true;worker.postMessage({target:Math.max(0,(elapsed+80-1800)*.36)});
           }
           // Wall-time budget is a clean exit, never a forced physical collapse.
           if(elapsed>35000)endAt??=now;
           if(current.reduced&&elapsed>2800)endAt??=now;
           const t=liveTimeline(elapsed,view,endAt===undefined?undefined:Math.max(0,now-endAt));
           const performanceTier=current.reduced?"current":performanceController.sample(now);
-          if(!current.reduced&&latest.status==="concentrated"&&endAt!==undefined&&now-endAt>400){
-            // The PDE ends here. The optional absorption toy retains its final
-            // composition but does not pretend to evolve post-horizon gravity.
-            worker.terminate();
-            stage.dataset.phase="playground";exit?.setAttribute("data-playground","");
-            const frozen={...t,phase:"orbit" as const,exposure:1,gather:1,complete:false};
-            let playgroundTier=performanceTier;
-            current.playgroundCleanup=startPlayground(doc,win,current.glyphs.map(g=>({
-              element:g.element,x:g.position?.x??g.home.x,y:g.position?.y??g.home.y,opacity:Number(g.lastOpacity??1)
-            })),Math.min(scene.scale.x,scene.scale.y)*apertureRadius(view),scene.center,
-            (center,light)=>renderer.render(frozen,[],false,light,playgroundTier,view,center),
-            now=>{playgroundTier=performanceController.sample(now);return playgroundTier==="reduced";});
-            return; // No idle rAF or worker; input wakes a bounded rim fade.
-          }
           if(t.complete){finish();return;}
           if(t.phase==="return" && current.sources.length){
             // Reset behind the opaque veil, then reveal the original document.
@@ -294,26 +318,55 @@ export function initializeAntiDeSitterExperience(doc:Document=document, win:Wind
             const coreRadius=Math.min(scene.scale.x,scene.scale.y)*apertureRadius(view);
             flux.fill(0);
             const scale=mix(1,Math.max(.52,cameraScale),t.gather);
+            const scaleText=scale.toFixed(4);
+            const markerScale="scale("+scaleText+")";
             for(const glyph of current.glyphs){
-              const radius=displayRadius(sampleRadial(view.radius,glyph.quantile!));
-              const target=screenPoint({x:radius*Math.cos(glyph.angle!),y:radius*Math.sin(glyph.angle!)},scene);
-              const p={x:mix(glyph.home.x,target.x,t.gather),y:mix(glyph.home.y,target.y,t.gather)};
+              const index=glyph.tracerIndex!,tracer=view.tracers!;
+              const targetX=scene.center.x+tracer[index]!*scene.scale.x;
+              const targetY=scene.center.y+tracer[index+1]!*scene.scale.y;
+              // Project the intrinsic velocity using the same chart and boundary
+              // clock. Sandbox consumes px/second, preserving the handoff motion.
+              glyph.velocity!.x=tracer[index+2]!*scene.scale.x*.36;
+              glyph.velocity!.y=tracer[index+3]!*scene.scale.y*.36;
+              const px=mix(glyph.home.x,targetX,t.gather),py=mix(glyph.home.y,targetY,t.gather);
               // Fixed readable marker footprints: the old shared Jacobian made
               // entire paragraphs breathe as sheets and shrank letters to dust.
-              const dx=p.x-scene.center.x,dy=p.y-scene.center.y;
-              const capture=captureAtAperture(Math.hypot(dx,dy),coreRadius,9);
-              if(capture.edge>0){
-                const bin=Math.floor((Math.atan2(dy,dx)+Math.PI)*96/(2*Math.PI))%96;
-                flux[bin]=(flux[bin]??0)+capture.edge*(glyph.latent?.45:1);
+              let captureOpacity=1;
+              if(coreRadius>0){
+                const dx=px-scene.center.x,dy=py-scene.center.y;
+                const capture=captureAtAperture(Math.hypot(dx,dy),coreRadius,9);
+                captureOpacity=capture.opacity;
+                if(capture.edge>0){
+                  const bin=Math.floor((Math.atan2(dy,dx)+Math.PI)*96/(2*Math.PI))%96;
+                  flux[bin]=(flux[bin]??0)+capture.edge*(glyph.latent?.45:1);
+                }
               }
-              const opacity=String(capture.opacity*(glyph.latent?t.gather*.45:1));
+              const opacity=String(captureOpacity*(glyph.latent?t.gather*.45:1));
               if(opacity!==glyph.lastOpacity){glyph.element.style.opacity=opacity;glyph.lastOpacity=opacity;}
               // Scrolling moves the camera's home frame, not the AdS state.
-              const y=p.y-(glyph.fixed?0:scrollDelta)*(1-t.gather);
-              glyph.position={x:p.x,y};
-              glyph.element.style.transform="translate("+p.x.toFixed(3)+"px,"+y.toFixed(3)+"px) scale("+scale.toFixed(4)+")";
+              const y=py-(glyph.fixed?0:scrollDelta)*(1-t.gather);
+              glyph.position!.x=px;glyph.position!.y=y;
+              const marker=playgroundMarkers[index/4]!;
+              marker.x=px;marker.y=y;marker.vx=glyph.velocity!.x;marker.vy=glyph.velocity!.y;marker.scale=markerScale;
+              const transform="translate("+px.toFixed(3)+"px,"+y.toFixed(3)+"px) scale("+scaleText+")";
+              if(transform!==glyph.lastTransform){glyph.element.style.transform=transform;glyph.lastTransform=transform;}
             }
             renderer.render(t,[],current.reduced,flux,performanceTier,view);
+          }
+          if(!current.reduced&&latest.status==="concentrated"&&blend===1){
+            // Hand off on the frame that displays the final solved state, AFTER
+            // updating marker positions and velocities above. Waiting for an
+            // endAge here froze the terminal snapshot for ~420ms. There is no
+            // physical reason to arrest the tracers before sandbox evolution.
+            // The sandbox remains an approximation, not post-horizon GR.
+            worker.terminate();
+            stage.dataset.phase="playground";exit?.setAttribute("data-playground","");
+            const frozen={...t,phase:"orbit" as const,exposure:1,gather:1,complete:false};
+            let playgroundTier=performanceTier;
+            current.playgroundCleanup=startPlayground(doc,win,playgroundMarkers,Math.min(scene.scale.x,scene.scale.y)*apertureRadius(view),scene.center,
+            (center,light)=>renderer.render(frozen,[],false,light,playgroundTier,view,center),
+            now=>{playgroundTier=performanceController.sample(now);return playgroundTier==="reduced";},prepared);
+            return;
           }
           current.raf=win.requestAnimationFrame(frame);
         } catch(error){finish();console.error("AdS experience restored after rendering error",error);}

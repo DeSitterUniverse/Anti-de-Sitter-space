@@ -1,6 +1,92 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AdSGravity } from "../../src/scripts/adsGravity.ts";
+import { AdSTracers, tracerInitialData } from "../../src/scripts/adsTracers.ts";
+import { preparePlayground, startPlayground } from "../../src/scripts/adsPlayground.ts";
+
+test("exterior initial data leaves more tracers outside the same solved concentration",()=>{
+  const previous=new Float64Array(600*4),next=previous.slice();
+  for(let i=0;i<600;i++){
+    const angle=i*2.39996323,R=.03+.85*((i*.7548776662)%1),nx=Math.cos(angle),ny=Math.sin(angle);
+    const q=.18*R/(1-.82*R),r=2*q/(1-q*q);
+    const pt=(i%7===0?-1:1)*(.12+.5*((i*.61803398875)%1)),pr=.16*(2*((i*.7548776662)%1)-1);
+    previous.set([nx*r,ny*r,nx*pr-ny*pt,ny*pr+nx*pt],i*4);
+    next.set(tracerInitialData(i,nx*R,ny*R),i*4);
+    if(i%3!==0)for(let j=0;j<4;j++)assert.ok(Math.abs(previous[i*4+j]!-next[i*4+j]!)<1e-12);
+  }
+  const solver=new AdSGravity(),before=new AdSTracers(previous),after=new AdSTracers(next);
+  const a=solver.a.slice(),v=solver.velocity.slice();
+  while(solver.status==="running"){
+    const start=solver.time;
+    for(let j=0;j<4&&solver.status==="running";j++)solver.step();
+    a.set(solver.a);v.set(solver.velocity);
+    for(let j=0;j<4&&solver.status==="running";j++)solver.step();
+    before.step(solver.time-start,a,v);after.step(solver.time-start,a,v);
+  }
+  assert.equal(solver.status,"concentrated");
+  // At minA < .08 the aperture compactness is saturated; use its display chart.
+  const q=Math.tan(solver.peakX/2),radius=q/(.18+.82*q);
+  const count=(tracers:AdSTracers)=>{
+    const s=tracers.snapshot(solver.a,solver.velocity);let n=0;
+    assert.ok(s.every(Number.isFinite));
+    for(let i=0;i<s.length;i+=4)if(Math.hypot(s[i]!,s[i+1]!)>radius)n++;
+    return n;
+  };
+  assert.ok(count(after)>count(before),`${count(before)} -> ${count(after)} exterior tracers`);
+});
+
+test("handoff retains invisible exterior tracers and counts interior mass exactly once",()=>{
+  const element=()=>({style:{transform:"scale(1)",opacity:"0",transition:""},hidden:false,
+    setAttribute(){},addEventListener(){},remove(){this.hidden=true;}});
+  const doc={createElement:element,body:{append(){}}} as unknown as Document;
+  let callback:FrameRequestCallback=()=>{},radius=0;
+  const win={innerWidth:1000,innerHeight:1000,performance:{now:()=>0},
+    requestAnimationFrame:(cb:FrameRequestCallback)=>{callback=cb;return 1;},cancelAnimationFrame(){}} as unknown as Window;
+  const outside=element(),inside=element();
+  const markers=[{element:outside as unknown as HTMLElement,x:850,y:500,opacity:1,vx:0,vy:0},
+    {element:inside as unknown as HTMLElement,x:500,y:500,opacity:1,vx:0,vy:0}];
+  const prepared=preparePlayground(doc,markers);assert.equal(prepared.control.hidden,true);
+  const cleanup=startPlayground(doc,win,markers,40,{x:500,y:500},c=>{radius=c.radius;},()=>false,prepared);
+  assert.equal(outside.style.opacity,"1");assert.equal(inside.style.opacity,"0");
+  callback(30);assert.equal(prepared.remaining.length,1);assert.ok(radius>40);
+  const grown=radius;callback(60);assert.equal(radius,grown);
+  assert.equal(prepared.remaining[0]!.element,outside);
+  cleanup();assert.equal(prepared.control.hidden,true);
+});
+
+test("Hamiltonian tracers match pure-AdS geodesics and conserve angular momentum",()=>{
+  const a=new Float64Array(385).fill(1),v=a.slice();
+  const orbit=createOrbit({x:1/(1+Math.sqrt(2)),y:0},.3);
+  for(const dt of [.004,.002]){
+    const tracers=new AdSTracers(new Float64Array([1,0,0,.3]));
+    let t=0;
+    while(t<2*Math.PI){const h=Math.min(dt,2*Math.PI-t);tracers.step(h,a,v);t+=h;}
+    const s=tracers.state,expected=fromDisk(sampleOrbit(orbit,t));
+    assert.ok(Math.hypot(s[0]!-expected.x,s[1]!-expected.y)<.001);
+    assert.ok(Math.abs(s[0]!*s[3]!-s[1]!*s[2]!-.3)<.00002);
+  }
+});
+test("tracers cross the regular centre and remain timelike",()=>{
+  const a=new Float64Array(385).fill(1),v=a.slice(),rate=new Float64Array(4);
+  const tracer=new AdSTracers(new Float64Array([.2,0,-.1,0]));
+  let crossed=false;
+  for(let i=0;i<1000;i++){
+    tracer.step(.002,a,v);const s=tracer.state;
+    crossed ||= s[0]!<0;
+    tracer.derivative(s,0,a,v,rate);
+    const r=Math.hypot(s[0]!,s[1]!),F=1+r*r,vr=r?(s[0]!*rate[0]!+s[1]!*rate[1]!)/r:0;
+    assert.ok(-F+rate[0]!**2+rate[1]!**2+(1/F-1)*vr*vr<0);
+    assert.ok(s.every(Number.isFinite));
+  }
+  assert.ok(crossed);
+});
+test("tracer display velocities agree with projected motion for handoff",()=>{
+  const a=new Float64Array(385).fill(1),v=a.slice();
+  const t=new AdSTracers(new Float64Array([.8,.3,-.1,.4]));
+  const before=t.snapshot(a,v);t.step(.0001,a,v);const after=t.snapshot(a,v);
+  assert.ok(Math.abs((after[0]!-before[0]!)/.0001-before[2]!)<.001);
+  assert.ok(Math.abs((after[1]!-before[1]!)/.0001-before[3]!)<.001);
+});
 import { segmentDistance, accretionRadius, accretionAcceleration } from "../../src/scripts/adsPlayground.ts";
 test("very slow sustained frames can enter reduced mode without classifying one pause",()=>{
   const c=createPerformanceController(0);

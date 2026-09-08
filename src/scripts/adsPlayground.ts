@@ -21,15 +21,21 @@ export function segmentDistance(px:number,py:number,ax:number,ay:number,bx:numbe
   const t=d?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/d)):0;
   return Math.hypot(px-ax-t*dx,py-ay-t*dy);
 }
-export interface PlaygroundMarker {element:HTMLElement;x:number;y:number;opacity:number;}
+export interface PlaygroundMarker {element:HTMLElement;x:number;y:number;opacity:number;vx?:number;vy?:number;scale?:string;}
+export function preparePlayground(doc:Document,markers:PlaygroundMarker[]){
+  const control=doc.createElement("button");
+  control.type="button";control.className="ads-drag-hole";control.hidden=true;
+  control.setAttribute("aria-label","Move black hole. Drag or use arrow keys to attract matter.");
+  doc.body.append(control);
+  return {control,flux:new Float32Array(96),remaining:markers.map(m=>({source:m,element:m.element,
+    x:0,y:0,opacity:1,qx:0,qy:0,vx:0,vy:0,transform:"",scale:"scale(1)"}))};
+}
 export function startPlayground(doc:Document,win:Window,markers:PlaygroundMarker[],radius:number,
   initial:{x:number;y:number},paint:(center:{x:number;y:number;radius:number},flux:Float32Array)=>void,
-  reducedAt:(now:number)=>boolean=()=>false){
-  const abort=new AbortController(),control=doc.createElement("button"),flux=new Float32Array(96);
-  control.type="button";control.className="ads-drag-hole";
-  control.setAttribute("aria-label","Move black hole. Drag or use arrow keys to attract matter.");
+  reducedAt:(now:number)=>boolean=()=>false,prepared=preparePlayground(doc,markers)){
+  const abort=new AbortController(),{control,flux,remaining}=prepared;
+  control.hidden=false;
   control.style.width=control.style.height=Math.max(44,radius*2)+"px";
-  doc.body.append(control);
   let x=initial.x,y=initial.y,targetX=x,targetY=y,raf=0,settleUntil=0,pointer:number|undefined,offsetX=0,offsetY=0;
   const unit=Math.min(win.innerWidth,win.innerHeight)*.45,initialR=radius/unit;
   let mass=(initialR+initialR**3)/2,last=win.performance.now(),accumulator=0;
@@ -41,20 +47,27 @@ export function startPlayground(doc:Document,win:Window,markers:PlaygroundMarker
     const size=Math.max(44,radius*2);
     if(controlSize!==size){control.style.width=control.style.height=size+"px";controlSize=size;}
   };position();
-  // Keep captured markers permanently gone; no resurfacing when the hole moves.
-  const remaining=markers.filter(m=>{
-    if(m.opacity<.03||Math.hypot(m.x-x,m.y-y)<radius){m.element.style.opacity="0";return false;}
-    return true;
-  }).map((m,i)=>{
+  // Visibility is not physical capture. Every tracer enters the sandbox; only
+  // its absorbing-boundary integration below removes it and transfers its mass.
+  // Obscured exterior tracers recover their base opacity over a short fade.
+  for(let i=0;i<remaining.length;i++){
+    const state=remaining[i]!,m=state.source;
     const qx=(m.x-initial.x)/unit,qy=(m.y-initial.y)/unit,r=Math.max(initialR,Math.hypot(qx,qy));
     // A distribution of sub-circular angular momenta produces plunges and
     // eccentric passes, not an imposed spiral. This is new sandbox initial data.
-    const speed=Math.sqrt(mass/r+r*r)*(.25+.65*((i*.61803398875)%1));
+    const speed=m.vx===undefined||m.vy===undefined?Math.sqrt(mass/r+r*r)*(.25+.65*((i*.61803398875)%1)):0;
     const sign=i%7===0?-1:1;
-    return {...m,qx,qy,vx:-qy/r*speed*sign-.04*qx,vy:qx/r*speed*sign-.04*qy,
-      transform:m.element.style.transform,
-      scale:m.element.style.transform.match(/scale\([^)]*\)/)?.[0]??"scale(1)"};
-  });
+    // Tracer handoff supplies projected px/wall-second velocities. Convert to
+    // sandbox units; only standalone fixtures use the old launch fallback.
+    state.x=m.x;state.y=m.y;state.opacity=m.opacity;state.qx=qx;state.qy=qy;
+    state.vx=m.vx===undefined?-qy/r*speed*sign-.04*qx:m.vx/(unit*.42);
+    state.vy=m.vy===undefined?qx/r*speed*sign-.04*qy:m.vy/(unit*.42);
+    state.transform=m.element.style.transform;
+    state.scale=m.scale??m.element.style.transform.match(/scale\([^)]*\)/)?.[0]??"scale(1)";
+    if(r>initialR&&m.element.style.opacity!==String(m.opacity)){
+      m.element.style.transition="opacity 180ms ease-out";m.element.style.opacity=String(m.opacity);
+    }
+  }
   const markerMass=initialMass/Math.max(1,remaining.length);
   const draw=(now:number)=>{
     raf=0;
@@ -69,16 +82,22 @@ export function startPlayground(doc:Document,win:Window,markers:PlaygroundMarker
       for(let i=remaining.length-1;i>=0;i--){
         const m=remaining[i]!;
         let dx=hx-m.qx,dy=hy-m.qy,d=Math.max(1e-6,Math.hypot(dx,dy)),f=mass/(d*d*d);
-        m.vx+=(dx*f-m.qx)*h/2;m.vy+=(dy*f-m.qy)*h/2;
         const ox=m.qx,oy=m.qy;
-        m.qx+=m.vx*h;m.qy+=m.vy*h;
+        // Already-interior tracers are absorbed before evaluating a singular
+        // force. They contribute mass once, without flashing back into view.
+        if(d>=radius/unit){
+          m.vx+=(dx*f-m.qx)*h/2;m.vy+=(dy*f-m.qy)*h/2;
+          m.qx+=m.vx*h;m.qy+=m.vy*h;
+        }
         const captured=segmentDistance(hx,hy,ox,oy,m.qx,m.qy)<radius/unit;
         if(captured){
           mass+=markerMass;radius=unit*accretionRadius(mass);
           const bin=Math.floor((Math.atan2(m.qy-hy,m.qx-hx)+Math.PI)*96/(2*Math.PI))%96;
           flux[bin]=flux[bin]!+m.opacity*8;
           m.element.style.transition="opacity 140ms ease-out";m.element.style.opacity="0";
-          remaining.splice(i,1);settleUntil=now+1100;continue;
+          // Removal order is irrelevant: swap-pop avoids quadratic shifts when
+          // many central tracers are absorbed together at the first step.
+          remaining[i]=remaining[remaining.length-1]!;remaining.pop();settleUntil=now+1100;continue;
         }
         dx=hx-m.qx;dy=hy-m.qy;d=Math.max(1e-6,Math.hypot(dx,dy));f=mass/(d*d*d);
         m.vx+=(dx*f-m.qx)*h/2;m.vy+=(dy*f-m.qy)*h/2;
