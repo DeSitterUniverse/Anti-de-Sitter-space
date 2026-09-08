@@ -23,7 +23,8 @@ export function segmentDistance(px:number,py:number,ax:number,ay:number,bx:numbe
 }
 export interface PlaygroundMarker {element:HTMLElement;x:number;y:number;opacity:number;}
 export function startPlayground(doc:Document,win:Window,markers:PlaygroundMarker[],radius:number,
-  initial:{x:number;y:number},paint:(center:{x:number;y:number;radius:number},flux:Float32Array)=>void){
+  initial:{x:number;y:number},paint:(center:{x:number;y:number;radius:number},flux:Float32Array)=>void,
+  reducedAt:(now:number)=>boolean=()=>false){
   const abort=new AbortController(),control=doc.createElement("button"),flux=new Float32Array(96);
   control.type="button";control.className="ads-drag-hole";
   control.setAttribute("aria-label","Move black hole. Drag or use arrow keys to attract matter.");
@@ -33,8 +34,13 @@ export function startPlayground(doc:Document,win:Window,markers:PlaygroundMarker
   const unit=Math.min(win.innerWidth,win.innerHeight)*.45,initialR=radius/unit;
   let mass=(initialR+initialR**3)/2,last=win.performance.now(),accumulator=0;
   const initialMass=mass;
-  const position=()=>{control.style.left=x+"px";control.style.top=y+"px";
-    control.style.width=control.style.height=Math.max(44,radius*2)+"px";};position();
+  let controlX=NaN,controlY=NaN,controlSize=NaN,lastPaint=-Infinity;
+  const position=()=>{
+    if(controlX!==x){control.style.left=x+"px";controlX=x;}
+    if(controlY!==y){control.style.top=y+"px";controlY=y;}
+    const size=Math.max(44,radius*2);
+    if(controlSize!==size){control.style.width=control.style.height=size+"px";controlSize=size;}
+  };position();
   // Keep captured markers permanently gone; no resurfacing when the hole moves.
   const remaining=markers.filter(m=>{
     if(m.opacity<.03||Math.hypot(m.x-x,m.y-y)<radius){m.element.style.opacity="0";return false;}
@@ -46,11 +52,13 @@ export function startPlayground(doc:Document,win:Window,markers:PlaygroundMarker
     const speed=Math.sqrt(mass/r+r*r)*(.25+.65*((i*.61803398875)%1));
     const sign=i%7===0?-1:1;
     return {...m,qx,qy,vx:-qy/r*speed*sign-.04*qx,vy:qx/r*speed*sign-.04*qy,
+      transform:m.element.style.transform,
       scale:m.element.style.transform.match(/scale\([^)]*\)/)?.[0]??"scale(1)"};
   });
   const markerMass=initialMass/Math.max(1,remaining.length);
   const draw=(now:number)=>{
     raf=0;
+    const reduced=reducedAt(now);
     const wall=Math.min(.05,(now-last)/1000);last=now;
     const oldX=x,oldY=y,follow=1-Math.exp(-wall/0.10);
     x+=(targetX-x)*follow;y+=(targetY-y)*follow;
@@ -59,8 +67,9 @@ export function startPlayground(doc:Document,win:Window,markers:PlaygroundMarker
     while(accumulator>=h){
       accumulator-=h;
       for(let i=remaining.length-1;i>=0;i--){
-        const m=remaining[i]!,a=accretionAcceleration(m.qx,m.qy,hx,hy,mass);
-        m.vx+=a.x*h/2;m.vy+=a.y*h/2;
+        const m=remaining[i]!;
+        let dx=hx-m.qx,dy=hy-m.qy,d=Math.max(1e-6,Math.hypot(dx,dy)),f=mass/(d*d*d);
+        m.vx+=(dx*f-m.qx)*h/2;m.vy+=(dy*f-m.qy)*h/2;
         const ox=m.qx,oy=m.qy;
         m.qx+=m.vx*h;m.qy+=m.vy*h;
         const captured=segmentDistance(hx,hy,ox,oy,m.qx,m.qy)<radius/unit;
@@ -71,15 +80,21 @@ export function startPlayground(doc:Document,win:Window,markers:PlaygroundMarker
           m.element.style.transition="opacity 140ms ease-out";m.element.style.opacity="0";
           remaining.splice(i,1);settleUntil=now+1100;continue;
         }
-        const b=accretionAcceleration(m.qx,m.qy,hx,hy,mass);
-        m.vx+=b.x*h/2;m.vy+=b.y*h/2;
+        dx=hx-m.qx;dy=hy-m.qy;d=Math.max(1e-6,Math.hypot(dx,dy));f=mass/(d*d*d);
+        m.vx+=(dx*f-m.qx)*h/2;m.vy+=(dy*f-m.qy)*h/2;
       }
     }
     for(const m of remaining){
       m.x=initial.x+m.qx*unit;m.y=initial.y+m.qy*unit;
-      m.element.style.transform=`translate(${m.x.toFixed(2)}px,${m.y.toFixed(2)}px) ${m.scale}`;
+      const transform=`translate(${m.x.toFixed(2)}px,${m.y.toFixed(2)}px) ${m.scale}`;
+      if(transform!==m.transform){m.element.style.transform=transform;m.transform=transform;}
     }
-    position();paint({x,y,radius},flux);flux.fill(0);
+    position();
+    // Only the soft Canvas aperture is rate-limited. Matter integration, DOM
+    // letters and pointer response retain their original cadence in both tiers.
+    if(!reduced||pointer!==undefined||now-lastPaint>=1000/30-1){
+      paint({x,y,radius},flux);flux.fill(0);lastPaint=now;
+    }
     if(remaining.length||now<settleUntil||Math.hypot(x-targetX,y-targetY)>.1||Math.hypot(x-oldX,y-oldY)>.1)raf=win.requestAnimationFrame(draw);
   };
   const wake=()=>{settleUntil=win.performance.now()+1100;if(!raf){last=win.performance.now();raf=win.requestAnimationFrame(draw);}};

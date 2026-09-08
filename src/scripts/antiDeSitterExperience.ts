@@ -262,10 +262,12 @@ export function initializeAntiDeSitterExperience(doc:Document=document, win:Wind
             worker.terminate();
             stage.dataset.phase="playground";exit?.setAttribute("data-playground","");
             const frozen={...t,phase:"orbit" as const,exposure:1,gather:1,complete:false};
+            let playgroundTier=performanceTier;
             current.playgroundCleanup=startPlayground(doc,win,current.glyphs.map(g=>({
               element:g.element,x:g.position?.x??g.home.x,y:g.position?.y??g.home.y,opacity:Number(g.lastOpacity??1)
             })),Math.min(scene.scale.x,scene.scale.y)*apertureRadius(view),scene.center,
-            (center,light)=>renderer.render(frozen,[],false,light,performanceTier,view,center));
+            (center,light)=>renderer.render(frozen,[],false,light,playgroundTier,view,center),
+            now=>{playgroundTier=performanceController.sample(now);return playgroundTier==="reduced";});
             return; // No idle rAF or worker; input wakes a bounded rim fade.
           }
           if(t.complete){finish();return;}

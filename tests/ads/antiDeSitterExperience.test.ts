@@ -2,6 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { AdSGravity } from "../../src/scripts/adsGravity.ts";
 import { segmentDistance, accretionRadius, accretionAcceleration } from "../../src/scripts/adsPlayground.ts";
+test("very slow sustained frames can enter reduced mode without classifying one pause",()=>{
+  const c=createPerformanceController(0);
+  for(let t=125;t<9000;t+=125)c.sample(t);
+  assert.equal(c.sample(9000),"reduced");
+  const fresh=createPerformanceController(0);
+  for(let t=16;t<5000;t+=16)fresh.sample(t);
+  assert.equal(fresh.sample(5200),"current");
+  for(let t=5216;t<10000;t+=16)assert.equal(fresh.sample(t),"current");
+});
 
 test("accretion radius follows Schwarzschild-AdS mass rather than time",()=>{
   for(const mass of [.001,.05,.2,1,10]){

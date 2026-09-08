@@ -18,10 +18,12 @@ export function createPerformanceController(start:number){
       if(now-start<3000)return tier;
       // Long tasks, debugger pauses and visibility interruptions are not proof
       // of weak hardware. Rebuild the full sustained evidence after any of them.
-      if(interval<=0 || interval>100){badWindows=0;reset(now);return tier;}
+      if(interval<=0 || interval>250){badWindows=0;reset(now);return tier;}
       samples++;total+=interval;if(interval>36)slow++;
       if(now-windowStart<1500)return tier;
-      const bad=samples>=20 && slow/samples>=.75 && total/samples>38;
+      // Sustained 7–10fps must qualify too; previously every >100ms frame
+      // reset the evidence, permanently excluding the devices needing help most.
+      const bad=samples>=8 && slow/samples>=.75 && total/samples>38;
       badWindows=bad?badWindows+1:0;
       reset(now);
       if(badWindows>=3)tier="reduced";

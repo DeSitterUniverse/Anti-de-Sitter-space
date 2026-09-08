@@ -21,6 +21,8 @@ export class AdSGravity {
   readonly a:Float64Array; readonly delta:Float64Array;
   readonly mass:Float64Array; readonly velocity:Float64Array;
   private readonly sin:Float64Array; private readonly cos:Float64Array;
+  private readonly midSC:Float64Array; private readonly midTan2:Float64Array;
+  private readonly tan2:Float64Array; private readonly divergence:Float64Array;
   private readonly work:Float64Array[];
   time=0; initialMass=0; minA=1; peakX=0;
   status:GravityFrame["status"]="running";
@@ -29,20 +31,27 @@ export class AdSGravity {
     const alloc=()=>new Float64Array(n+1);
     this.phi=alloc();this.pi=alloc();this.a=alloc();this.delta=alloc();
     this.mass=alloc();this.velocity=alloc();this.sin=alloc();this.cos=alloc();
+    this.midSC=alloc();this.midTan2=alloc();this.tan2=alloc();this.divergence=alloc();
     this.work=Array.from({length:10},alloc);
     for(let i=0;i<=n;i++){
       const x=i*this.dx,s=Math.sin(x),c=Math.cos(x);
       this.sin[i]=s;this.cos[i]=c;
       this.pi[i]=amplitude*Math.exp(-((Math.tan(x)/width)**2))*c**3;
+      const ms=Math.sin((i-.5)*this.dx),mc=Math.cos((i-.5)*this.dx);
+      this.midSC[i]=ms*mc;this.midTan2[i]=(ms/mc)**2;
+      this.tan2[i]=(s/c)*(s/c);
+    }
+    for(let i=1;i<n;i++){
+      const lo=this.sin[i-1]!/this.cos[i-1]!,hi=this.sin[i+1]!/this.cos[i+1]!;
+      this.divergence[i]=(hi**3-lo**3)*this.cos[i]!**2;
     }
     this.metric(this.phi,this.pi);this.initialMass=this.mass[n]!;
   }
   private metric(p:Float64Array,q:Float64Array){
     const {n,dx}=this;this.mass[0]=0;this.delta[0]=0;this.a[0]=1;
     for(let i=1;i<=n;i++){
-      const x=(i-.5)*dx,s=Math.sin(x),c=Math.cos(x);
       const energy=((p[i-1]!**2+q[i-1]!**2)+(p[i]!**2+q[i]!**2))*.5;
-      const k=s*c*energy,b=(s/c)**2*energy;
+      const k=this.midSC[i]!*energy,b=this.midTan2[i]!*energy;
       const z=k*dx,decay=Math.exp(-z);
       this.mass[i]=this.mass[i-1]!*decay+(k>1e-12?b*(-Math.expm1(-z))/k:b*dx);
       this.delta[i]=this.delta[i-1]!-k*dx;
@@ -64,15 +73,14 @@ export class AdSGravity {
       // Differentiate flux against tan³x near the regular origin. This avoids
       // the unstable discrete cancellation of Φ_x+2Φ/x at the first nodes.
       // At the last interior point use normalizable boundary asymptotics.
-      const lo=this.sin[i-1]!/this.cos[i-1]!,hi=this.sin[i+1]!/this.cos[i+1]!;
-      dq[i]=i<n-1?3*(hi*hi*v[i+1]!*p[i+1]!-lo*lo*v[i-1]!*p[i-1]!)/((hi**3-lo**3)*this.cos[i]!**2)
+      dq[i]=i<n-1?3*(this.tan2[i+1]!*v[i+1]!*p[i+1]!-this.tan2[i-1]!*v[i-1]!*p[i-1]!)/this.divergence[i]!
         :(v[i+1]!*p[i+1]!-v[i-1]!*p[i-1]!)/(2*dx)+2*v[i]!*p[i]!/(this.sin[i]!*this.cos[i]!);
     }
     dp[n]=0;dq[n]=0;
   }
   step(){
     if(this.status!=="running")return;
-    const dt=.15*this.dx,w=this.work,[p,q]=[this.phi,this.pi];
+    const dt=.15*this.dx,w=this.work,p=this.phi,q=this.pi;
     this.rhs(p,q,w[0]!,w[1]!);
     for(let stage=1;stage<=3;stage++){
       const f=stage===3?dt:dt/2,previous=2*(stage-1);
