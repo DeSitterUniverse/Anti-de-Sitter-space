@@ -1,13 +1,20 @@
-import { createOrbit, letterLaunch, mix, sampleOrbit, timeline, shellRadius, horizonDiskRadius, blackHoleFormation, captureAtAperture, type Orbit, type Vec2 } from "./antiDeSitterGeometry";
+import { mix, captureAtAperture, type Vec2 } from "./antiDeSitterGeometry";
+import type { GravityFrame } from "./adsGravity";
+import { apertureRadius, displayRadius, liveTimeline, sampleRadial } from "./adsLiveState";
 import { createAntiDeSitterRenderer, createScene, screenPoint, type Scene } from "./antiDeSitterRenderer";
 import { getActiveTheme, THEME_CHANGE_EVENT } from "./themeController";
+import { createPerformanceController } from "./antiDeSitterPerformance";
+import { startPlayground } from "./adsPlayground";
 
 interface Glyph {
   element: HTMLElement;
-  orbit: Orbit;
   home: Vec2;
   fixed: boolean;
   latent?: boolean;
+  lastOpacity?: string;
+  quantile?:number;
+  angle?:number;
+  position?:Vec2;
 }
 interface Source { text: Text; wrapper: HTMLElement }
 interface Run {
@@ -22,6 +29,8 @@ interface Run {
   attributes: { element: Element; name: string; value: string|null }[];
   abort: AbortController;
   lastFrame: number;
+  worker?:Worker;
+  playgroundCleanup?:()=>void;
 }
 const EXCLUDE = "script,style,noscript,svg,input,select,textarea,option,[data-enter-spacetime],.galaxy-settings";
 const ROOTS = ".editorial-rail, main, #connect,.theme-selector,.text-tone-selector";
@@ -83,8 +92,6 @@ function capture(run:Run, doc:Document, host:HTMLElement) {
     run.sources.push({text:plan.text,wrapper});
     for(const piece of plan.pieces){
       const rect=piece.rect, home={x:rect.left+rect.width/2,y:rect.top+rect.height/2};
-      const q={x:(home.x-run.scene.home.x)/run.scene.homeScale.x,y:(home.y-run.scene.home.y)/run.scene.homeScale.y};
-      const length=Math.hypot(q.x,q.y);if(length>=0.97){q.x*=0.97/length;q.y*=0.97/length;}
       const element=doc.createElement("span");
       element.className="ads-glyph";
       element.textContent=piece.text;
@@ -99,7 +106,7 @@ function capture(run:Run, doc:Document, host:HTMLElement) {
       element.style.left=-rect.width/2+"px";element.style.top=-rect.height/2+"px";
       element.style.transform="translate("+home.x+"px,"+home.y+"px)";
       fragment.append(element);
-      run.glyphs.push({element,orbit:createOrbit(q,letterLaunch(run.glyphs.length)),home,fixed:plan.fixed,latent:piece.latent});
+      run.glyphs.push({element,home,fixed:plan.fixed,latent:piece.latent});
     }
   }
   host.append(fragment);
@@ -108,15 +115,13 @@ function capture(run:Run, doc:Document, host:HTMLElement) {
     if(original.closest(".galaxy-settings"))continue;
     const rect=original.getBoundingClientRect();if(!rect.width || !rect.height)continue;
     const home={x:rect.left+rect.width/2,y:rect.top+rect.height/2};
-    const q={x:(home.x-run.scene.home.x)/run.scene.homeScale.x,y:(home.y-run.scene.home.y)/run.scene.homeScale.y};
-    const length=Math.hypot(q.x,q.y);if(length>=0.97){q.x*=0.97/length;q.y*=0.97/length;}
     const element=doc.createElement("span");element.className="ads-glyph";
     const clone=original.cloneNode(true) as Element;
     clone.removeAttribute("id");clone.querySelectorAll("[id]").forEach(node=>node.removeAttribute("id"));
     element.append(clone);element.style.cssText=`width:${rect.width}px;height:${rect.height}px;left:${-rect.width/2}px;top:${-rect.height/2}px;color:${win.getComputedStyle(original).color};`;
     run.attributes.push({element:original,name:"style",value:original.getAttribute("style")});
     original.style.visibility="hidden";
-    host.append(element);run.glyphs.push({element,orbit:createOrbit(q,letterLaunch(run.glyphs.length)),home,fixed:!!original.closest(".editorial-rail,.theme-selector,.text-tone-selector")});
+    host.append(element);run.glyphs.push({element,home,fixed:!!original.closest(".editorial-rail,.theme-selector,.text-tone-selector")});
   }
 }
 
@@ -140,12 +145,14 @@ export function initializeAntiDeSitterExperience(doc:Document=document, win:Wind
     r.attributes.push({element,name,value:element.getAttribute(name)});
   };
   const finish=()=>{
-    const restoreFocus=doc.activeElement===exit;
+    const restoreFocus=doc.activeElement===exit||doc.activeElement?.classList.contains("ads-drag-hole");
     generation++;
     const ending=run;run=undefined;preparing=false;
     if(ending){
       win.cancelAnimationFrame(ending.raf);
       ending.abort.abort();
+      ending.worker?.terminate();
+      ending.playgroundCleanup?.();
       for(const source of ending.sources)source.wrapper.replaceWith(source.text);
       host.replaceChildren();
       ending.renderer.destroy();
@@ -154,7 +161,7 @@ export function initializeAntiDeSitterExperience(doc:Document=document, win:Wind
         else item.element.setAttribute(item.name,item.value);
       }
       stage.hidden=true;
-      if(exit)exit.hidden=true;
+      if(exit){exit.hidden=true;exit.removeAttribute("data-playground");}
       stage.removeAttribute("data-phase");stage.removeAttribute("data-tau");stage.removeAttribute("data-glyph-count");
       win.dispatchEvent(new CustomEvent("galaxy:visibility",{detail:{visible:getActiveTheme(doc)==="galaxy"}}));
     }
@@ -201,24 +208,78 @@ export function initializeAntiDeSitterExperience(doc:Document=document, win:Wind
       win.addEventListener("keydown",(event)=>{if(event.key==="Escape")finish();},{signal:current.abort.signal});
       doc.addEventListener("visibilitychange",()=>{if(doc.hidden)finish();},{signal:current.abort.signal});
       motion.addEventListener("change",stop,{signal:current.abort.signal});
-      const representatives=current.glyphs.filter((_,i)=>i%Math.max(1,Math.floor(current.glyphs.length/6))===0).slice(0,6).map(g=>g.orbit);
+      // Every glyph is an equal-energy sample with a fixed angular label.
+      // Hash the rank to separate neighboring letters without inventing forces.
+      for(let i=0;i<current.glyphs.length;i++){
+        const g=current.glyphs[i]!;
+        g.quantile=((i*.6180339887498949)%1);
+        g.angle=2*Math.PI*((i*.7548776662466927)%1);
+      }
       current.start=win.performance.now();
+      const worker=new Worker(new URL("./adsGravity.worker.ts",import.meta.url),{type:"module"});
+      current.worker=worker;
+      let latest:GravityFrame|undefined,previous:GravityFrame|undefined,view:GravityFrame|undefined;
+      let received=current.start,pending=true,endAt:number|undefined;
+      worker.onmessage=(event:MessageEvent<GravityFrame>)=>{
+        if(run!==current)return;
+        previous=view?{...view,radius:view.radius.slice(),speed:view.speed.slice(),lapse:view.lapse.slice()}:event.data;
+        latest=event.data;
+        view??={...latest,radius:latest.radius.slice(),speed:latest.speed.slice(),lapse:latest.lapse.slice()};
+        pending=false;received=win.performance.now();
+        if(latest.status!=="running")endAt??=received+100;
+      };
+      worker.onerror=()=>finish();
+      worker.postMessage({target:0});
+      const performanceController=createPerformanceController(current.start);
+      const flux=new Float32Array(96);
       const frame=(now:number)=>{
         if(run!==current)return;
         try {
-          const t=timeline(now-current.start,current.reduced);
+          const elapsed=now-current.start;
+          if(!latest||!previous||!view){
+            if(elapsed>5000){finish();return;}
+            current.raf=win.requestAnimationFrame(frame);return;
+          }
+          const blend=Math.min(1,(now-received)/80);
+          for(const key of ["radius","speed","lapse"] as const){
+            for(let i=0;i<view[key].length;i++)view[key][i]=mix(previous[key][i]!,latest[key][i]!,blend);
+          }
+          view.time=mix(previous.time,latest.time,blend);
+          view.minA=mix(previous.minA,latest.minA,blend);
+          view.peakX=mix(previous.peakX,latest.peakX,blend);
+          view.mass=latest.mass;view.status=latest.status;
+          if(!pending&&latest.status==="running"&&now-received>=80){
+            pending=true;worker.postMessage({target:Math.max(0,(elapsed-1800)*.36)});
+          }
+          // Wall-time budget is a clean exit, never a forced physical collapse.
+          if(elapsed>35000)endAt??=now;
+          if(current.reduced&&elapsed>2800)endAt??=now;
+          const t=liveTimeline(elapsed,view,endAt===undefined?undefined:Math.max(0,now-endAt));
+          const performanceTier=current.reduced?"current":performanceController.sample(now);
+          if(!current.reduced&&latest.status==="concentrated"&&endAt!==undefined&&now-endAt>400){
+            // The PDE ends here. The optional absorption toy retains its final
+            // composition but does not pretend to evolve post-horizon gravity.
+            worker.terminate();
+            stage.dataset.phase="playground";exit?.setAttribute("data-playground","");
+            const frozen={...t,phase:"orbit" as const,exposure:1,gather:1,complete:false};
+            current.playgroundCleanup=startPlayground(doc,win,current.glyphs.map(g=>({
+              element:g.element,x:g.position?.x??g.home.x,y:g.position?.y??g.home.y,opacity:Number(g.lastOpacity??1)
+            })),Math.min(scene.scale.x,scene.scale.y)*apertureRadius(view),scene.center,
+            (center,light)=>renderer.render(frozen,[],false,light,performanceTier,view,center));
+            return; // No idle rAF or worker; input wakes a bounded rim fade.
+          }
           if(t.complete){finish();return;}
           if(t.phase==="return" && current.sources.length){
             // Reset behind the opaque veil, then reveal the original document.
             for(const source of current.sources.splice(0))source.wrapper.replaceWith(source.text);
+            host.replaceChildren();current.glyphs.length=0;
             for(const item of current.attributes){
               if(item.name!=="style" || item.element===stage)continue;
               if(item.value===null)item.element.removeAttribute(item.name);
               else item.element.setAttribute(item.name,item.value);
             }
           }
-          // A stalled frame never accumulates integration error. Every visual
-          // consumes the SAME analytic tau in the SAME render frame.
+          // Interpolated solver snapshots drive every visual on one clock.
           if(!current.reduced || now-current.lastFrame>=80){
             current.lastFrame=now;
             stage.dataset.phase=t.phase;stage.dataset.tau=t.tau.toFixed(5);stage.dataset.glyphCount=String(current.glyphs.length);
@@ -228,27 +289,29 @@ export function initializeAntiDeSitterExperience(doc:Document=document, win:Wind
               mix(1,scene.scale.y/scene.homeScale.y,t.gather)
             );
             const scrollDelta=win.scrollY-current.scroll;
-            const shell=shellRadius(t.collapse);
-            const coreRadius=Math.min(scene.scale.x,scene.scale.y)*horizonDiskRadius*blackHoleFormation(t.collapse).core;
-            const flux=new Float32Array(96);
+            const coreRadius=Math.min(scene.scale.x,scene.scale.y)*apertureRadius(view);
+            flux.fill(0);
+            const scale=mix(1,Math.max(.52,cameraScale),t.gather);
             for(const glyph of current.glyphs){
-              const orbitTau=t.tau;
-              const q=sampleOrbit(glyph.orbit,orbitTau);
-              if(t.collapse>0){q.x*=shell/0.96;q.y*=shell/0.96;}
-              const p=screenPoint(q,scene,t.gather);
+              const radius=displayRadius(sampleRadial(view.radius,glyph.quantile!));
+              const target=screenPoint({x:radius*Math.cos(glyph.angle!),y:radius*Math.sin(glyph.angle!)},scene);
+              const p={x:mix(glyph.home.x,target.x,t.gather),y:mix(glyph.home.y,target.y,t.gather)};
               // Fixed readable marker footprints: the old shared Jacobian made
               // entire paragraphs breathe as sheets and shrank letters to dust.
-              const scale=mix(1,Math.max(.52,cameraScale),t.gather)*(t.collapse>0?Math.max(.35,Math.sqrt(shell/0.96)):1);
               const dx=p.x-scene.center.x,dy=p.y-scene.center.y;
               const capture=captureAtAperture(Math.hypot(dx,dy),coreRadius,9);
-              const bin=Math.floor((Math.atan2(dy,dx)+Math.PI)*96/(2*Math.PI))%96;
-              flux[bin]=(flux[bin]??0)+capture.edge*(glyph.latent?.45:1);
-              glyph.element.style.opacity=String(capture.opacity*(glyph.latent?t.gather*.45:1));
+              if(capture.edge>0){
+                const bin=Math.floor((Math.atan2(dy,dx)+Math.PI)*96/(2*Math.PI))%96;
+                flux[bin]=(flux[bin]??0)+capture.edge*(glyph.latent?.45:1);
+              }
+              const opacity=String(capture.opacity*(glyph.latent?t.gather*.45:1));
+              if(opacity!==glyph.lastOpacity){glyph.element.style.opacity=opacity;glyph.lastOpacity=opacity;}
               // Scrolling moves the camera's home frame, not the AdS state.
               const y=p.y-(glyph.fixed?0:scrollDelta)*(1-t.gather);
+              glyph.position={x:p.x,y};
               glyph.element.style.transform="translate("+p.x.toFixed(3)+"px,"+y.toFixed(3)+"px) scale("+scale.toFixed(4)+")";
             }
-            renderer.render(t,representatives,current.reduced,flux);
+            renderer.render(t,[],current.reduced,flux,performanceTier,view);
           }
           current.raf=win.requestAnimationFrame(frame);
         } catch(error){finish();console.error("AdS experience restored after rendering error",error);}

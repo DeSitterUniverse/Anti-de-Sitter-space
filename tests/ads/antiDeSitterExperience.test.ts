@@ -1,9 +1,91 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { AdSGravity } from "../../src/scripts/adsGravity.ts";
+import { segmentDistance, accretionRadius, accretionAcceleration } from "../../src/scripts/adsPlayground.ts";
+
+test("accretion radius follows Schwarzschild-AdS mass rather than time",()=>{
+  for(const mass of [.001,.05,.2,1,10]){
+    const r=accretionRadius(mass);
+    assert.ok(Math.abs(r+r**3-2*mass)<1e-9);
+    assert.ok(accretionRadius(mass*2)>r);
+  }
+});
+test("sandbox force attracts matter and retains AdS vacuum confinement",()=>{
+  const vacuum=accretionAcceleration(1,2,0,0,0);
+  assert.deepEqual(vacuum,{x:-1,y:-2});
+  const gravity=accretionAcceleration(1,0,0,0,.2);
+  assert.equal(gravity.x,-1.2);assert.equal(gravity.y,0);
+});
+
+test("playground swept capture does not skip letters during fast drags",()=>{
+  assert.equal(segmentDistance(50,0,0,0,100,0),0);
+  assert.equal(segmentDistance(50,20,0,0,100,0),20);
+  assert.equal(segmentDistance(110,0,0,0,100,0),10);
+  assert.equal(segmentDistance(3,4,0,0,0,0),5);
+});
+
+test("live gravity preserves vacuum and the weak-field AdS normal mode",()=>{
+  const vacuum=new AdSGravity(96,0);vacuum.advance(1);
+  assert.equal(vacuum.status,"running");assert.equal(vacuum.minA,1);
+  const errors:number[]=[];
+  for(const n of [96,192]){
+    const s=new AdSGravity(n,.0001,Infinity);s.advance(.8);
+    let error=0;
+    for(let i=0;i<n;i++){
+      const x=i*s.dx,expected=.0001*Math.cos(x)**3*Math.cos(3*s.time);
+      error+=(s.pi[i]!-expected)**2*s.dx;
+    }
+    errors.push(Math.sqrt(error));
+    assert.equal(s.status,"running");
+  }
+  assert.ok(errors[1]!<errors[0]!*.4,`${errors}`);
+});
+test("live collapse is resolution-consistent, conserves mass, and depends on initial data",()=>{
+  const outcomes=[];
+  for(const n of [384,768]){
+    const s=new AdSGravity(n);s.advance(7);
+    assert.equal(s.status,"concentrated");
+    assert.ok(Math.abs(s.mass[n]!/s.initialMass-1)<.001);
+    assert.ok(s.time>Math.PI); // Not immediate collapse: returning field.
+    const frame=s.snapshot();
+    for(let i=1;i<frame.radius.length;i++)assert.ok(frame.radius[i]!>=frame.radius[i-1]!);
+    outcomes.push(s.time);
+  }
+  assert.ok(Math.abs(outcomes[0]!-outcomes[1]!)/outcomes[1]!<.01);
+  const weak=new AdSGravity(192,2);weak.advance(6);
+  assert.equal(weak.status,"running");assert.ok(weak.minA>.9);
+});
+import { createPerformanceController } from "../../src/scripts/antiDeSitterPerformance.ts";
 import { letterLaunch, playback, samplePulse, pulseContact, PULSE_ORIGIN, PULSE_RAYS, blackHoleFormation, captureAtAperture } from "../../src/scripts/antiDeSitterGeometry.ts";
 import { atProperTime, createOrbit, dot, DURATION, fromDisk, LAUNCH, nullRadius, ORBIT_DURATION, PERIOD, properTime, RELEASE, sampleLight, sampleOrbit, timeline, toDisk, hyperbolicLine, shellRadius, schwarzschildLapse, HORIZON_RADIUS, horizonDiskRadius } from "../../src/scripts/antiDeSitterGeometry.ts";
 const near=(a:number,b:number,tol=1e-9)=>assert.ok(Math.abs(a-b)<tol,`${a} != ${b}`);
 const seeds=[{x:0,y:0},{x:.02,y:-.7},{x:.65,y:.6},{x:-.4,y:.2}];
+test("performance tier ignores startup, healthy 30/60/120Hz and isolated stalls",()=>{
+  for(const interval of [1000/120,1000/60,1000/30]){
+    const c=createPerformanceController(0);
+    for(let now=interval;now<18000;now+=interval)assert.equal(c.sample(now),"current");
+  }
+  const c=createPerformanceController(0);let now=0;
+  for(;now<2900;now+=50)assert.equal(c.sample(now),"current");
+  for(;now<18000;now+=16.67){
+    if(now>8000 && now<8020)now+=400;
+    assert.equal(c.sample(now),"current");
+  }
+});
+test("performance tier requires sustained bad windows, never upgrades during a run",()=>{
+  const c=createPerformanceController(0);
+  for(let now=50;now<7500;now+=50)assert.equal(c.sample(now),"current");
+  assert.equal(c.sample(7500),"reduced");
+  for(let now=7516;now<18000;now+=16)assert.equal(c.sample(now),"reduced");
+  assert.equal(createPerformanceController(18000).sample(18016),"current");
+});
+test("short bursts and a long stall break consecutive downgrade evidence",()=>{
+  const c=createPerformanceController(0);let now=0;
+  for(;now<6000;now+=50)assert.equal(c.sample(now),"current");
+  now+=300;assert.equal(c.sample(now),"current");
+  for(let end=now+2500;now<end;now+=50)assert.equal(c.sample(now),"current");
+  for(;now<18000;now+=16.67)assert.equal(c.sample(now),"current");
+});
 test("aperture captures individual distances continuously and illuminates only its edge",()=>{
   near(captureAtAperture(0,0,9).opacity,1);
   near(captureAtAperture(70,100,9).opacity,0);

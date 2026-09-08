@@ -1,4 +1,8 @@
 /**
+ * REFERENCE MATHEMATICS: analytic test orbits and the historical shell timeline
+ * below are retained for regression tests. The active experience now uses
+ * adsGravity.ts; it does not call sampleOrbit, shellRadius or timeline.
+ *
  * Equatorial sector of universal-cover AdS4, L=c=1, ambient signature (--+++).
  * The unused third spatial embedding coordinate is zero throughout.
  * -U²-V²+X²+Y²=-1; U=A cos(tau), V=A sin(tau), A=sqrt(1+r²).
