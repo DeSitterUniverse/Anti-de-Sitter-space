@@ -12,7 +12,10 @@ const { showThemeSelector = true, initialTheme = "dark" } = Astro.props;
 ---
 
 <aside class="editorial-rail">
-  <a class="rail-name" href="#about">Skye<br />Ibrahim</a>
+  <a class="rail-name" href="#about">
+    <span class="rail-name-desktop">Skye<br />Ibrahim</span>
+    <span class="rail-name-mobile">Skye Ibrahim</span>
+  </a>
   <p class="rail-roles">Data Engineer<br />Full-Stack Developer<br />Automation Developer</p>
 
   <nav aria-label="Main navigation">
@@ -30,7 +33,77 @@ const { showThemeSelector = true, initialTheme = "dark" } = Astro.props;
     <a href="https://www.linkedin.com/in/mnayer/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"><LinkedinLogoLight /></a>
     <a href="/resume-skye-ibrahim.pdf" target="_blank" rel="noopener noreferrer" aria-label="Resume"><FilePdfLight /></a>
   </div>
+
+  <button
+    class="mobile-menu-toggle"
+    type="button"
+    aria-label="Open navigation"
+    aria-expanded="false"
+    aria-controls="mobile-navigation"
+    data-mobile-menu-toggle
+  >
+    <span aria-hidden="true"></span>
+    <span aria-hidden="true"></span>
+  </button>
 </aside>
+
+<div id="mobile-navigation" class="mobile-nav-panel" role="dialog" aria-modal="true" aria-label="Site navigation" aria-hidden="true" inert data-mobile-nav-panel>
+  <div class="mobile-nav-inner">
+    <p class="mobile-nav-kicker">Navigation</p>
+
+    <nav class="mobile-nav-links" aria-label="Mobile navigation">
+      <a href="/#about"><span>01</span><strong>About</strong></a>
+      <a href="/#experience"><span>02</span><strong>Experience</strong></a>
+      <a href="/#stack"><span>03</span><strong>Skills</strong></a>
+      <a href="/#projects"><span>04</span><strong>Projects</strong></a>
+      <a href="/blog/"><span>05</span><strong>Blog</strong></a>
+      <a href="/#connect"><span>06</span><strong>Contact</strong></a>
+    </nav>
+
+    {showThemeSelector && (
+      <button class="mobile-ads-entry" type="button" data-mobile-enter-spacetime>
+        <span class="mobile-ads-label">Enter</span>
+        <strong>Anti-de Sitter space</strong>
+        <span class="mobile-ads-arrow" aria-hidden="true">→</span>
+      </button>
+    )}
+
+    <div class="mobile-nav-footer">
+      <div class="mobile-profile-links" aria-label="Profile links">
+        <a href="https://github.com/DeSitterUniverse" target="_blank" rel="noopener noreferrer"><GithubLogoLight /><span>GitHub</span></a>
+        <a href="https://www.linkedin.com/in/mnayer/" target="_blank" rel="noopener noreferrer"><LinkedinLogoLight /><span>LinkedIn</span></a>
+        <a href="/resume-skye-ibrahim.pdf" target="_blank" rel="noopener noreferrer"><FilePdfLight /><span>Resume</span></a>
+      </div>
+
+      <div class="mobile-settings">
+        {showThemeSelector && (
+          <div class="mobile-setting-row">
+            <span>Background</span>
+            <div class="mobile-setting-controls" role="group" aria-label="Background theme">
+              <button type="button" data-theme-option="galaxy" aria-label="Galaxy merger background" aria-pressed={initialTheme === "galaxy"}>
+                <SpiralLight />
+              </button>
+              <button type="button" data-theme-option="dark" aria-label="Dark theme" aria-pressed={initialTheme === "dark"}>
+                <span class="dark-theme-dot" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+        )}
+        <div class="mobile-setting-row">
+          <span>Text colour</span>
+          <div class="mobile-setting-controls" role="group" aria-label="Text colour">
+            <button type="button" data-text-tone="default" aria-label="Default text colour" aria-pressed="false">
+              <span class="tone-dot tone-dot-default" aria-hidden="true"></span>
+            </button>
+            <button type="button" data-text-tone="warm" aria-label="Warm text colour" aria-pressed="false">
+              <span class="tone-dot tone-dot-warm" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 {showThemeSelector && (
   <div class="theme-selector" role="group" aria-label="Background theme">
@@ -58,18 +131,324 @@ const { showThemeSelector = true, initialTheme = "dark" } = Astro.props;
     document.querySelectorAll("[data-text-tone]").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.textTone === tone));
     });
+
+    const toggle = document.querySelector("[data-mobile-menu-toggle]");
+    const panel = document.querySelector("[data-mobile-nav-panel]");
+    if (!(toggle instanceof HTMLButtonElement) || !(panel instanceof HTMLElement)) return;
+
+    let previousOverflow = "";
+    let open = false;
+
+    const focusable = () => Array.from(panel.querySelectorAll(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )).filter((element) => element instanceof HTMLElement && !element.hasAttribute("inert"));
+
+    const closeMenu = (restoreFocus = true) => {
+      if (!open) return;
+      open = false;
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.setAttribute("aria-label", "Open navigation");
+      panel.setAttribute("aria-hidden", "true");
+      panel.setAttribute("inert", "");
+      document.documentElement.style.overflow = previousOverflow;
+      if (restoreFocus) toggle.focus({ preventScroll: true });
+    };
+
+    const openMenu = () => {
+      if (open) return;
+      open = true;
+      previousOverflow = document.documentElement.style.overflow;
+      toggle.setAttribute("aria-expanded", "true");
+      toggle.setAttribute("aria-label", "Close navigation");
+      panel.setAttribute("aria-hidden", "false");
+      panel.removeAttribute("inert");
+      document.documentElement.style.overflow = "hidden";
+      requestAnimationFrame(() => focusable()[0]?.focus({ preventScroll: true }));
+    };
+
+    toggle.addEventListener("click", () => open ? closeMenu() : openMenu());
+
+    panel.querySelectorAll("a[href]").forEach((link) => {
+      link.addEventListener("click", () => closeMenu(false));
+    });
+
+    panel.querySelector("[data-mobile-enter-spacetime]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      closeMenu(false);
+      requestAnimationFrame(() => {
+        const desktopTrigger = document.querySelector("[data-enter-spacetime]");
+        if (desktopTrigger instanceof HTMLElement) desktopTrigger.click();
+      });
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (!open) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMenu();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    });
+
+    const mobileQuery = window.matchMedia("(max-width: 900px)");
+    mobileQuery.addEventListener("change", (event) => {
+      if (!event.matches) closeMenu(false);
+    });
   })();
 </script>
 
 <style>
+  .rail-name-mobile,
+  .mobile-menu-toggle,
+  .mobile-nav-panel { display: none; }
+
   [data-enter-spacetime] {color:var(--color-accent-bright);opacity:.2;transition:opacity 180ms ease,text-shadow 180ms ease;}
   [data-enter-spacetime]:hover,[data-enter-spacetime]:focus-visible {opacity:1;text-shadow:0 0 12px color-mix(in srgb,var(--color-accent-bright) 45%,transparent);}
-  @media(prefers-reduced-motion:reduce){[data-enter-spacetime]{transition:none;}}
-  @media(max-width:900px){
-    :global(.editorial-rail nav){flex-wrap:wrap;row-gap:6px;min-width:0;}
-    [data-enter-spacetime]{flex-basis:100%;text-align:right;padding-block:8px;}
+
+  @media(prefers-reduced-motion:reduce){
+    [data-enter-spacetime],
+    .mobile-nav-panel,
+    .mobile-menu-toggle span {transition:none!important;}
   }
-  @media(max-width:620px){
-    :global(.editorial-rail nav){max-width:calc(100vw - 210px);column-gap:10px;}
+
+  @media(max-width:900px){
+    :global(.editorial-rail) {
+      position: sticky!important;
+      top: 0;
+      z-index: 90!important;
+      width: 100%!important;
+      height: 50px!important;
+      min-height: 50px!important;
+      padding: 0 16px 0 18px!important;
+      flex-direction: row!important;
+      align-items: center!important;
+      border-right: 0!important;
+      border-bottom: 1px solid var(--color-border-dim)!important;
+      background: rgba(8, 7, 11, .9)!important;
+      backdrop-filter: blur(16px);
+    }
+    :global(html[data-theme="dark"] .editorial-rail) { background: rgba(26, 22, 35, .96)!important; }
+    :global(.editorial-rail .rail-name) {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      font-size: 1.42rem!important;
+      line-height: 1!important;
+      letter-spacing: -0.045em!important;
+    }
+    .rail-name-desktop { display: none; }
+    .rail-name-mobile { display: inline; white-space: nowrap; }
+    :global(.editorial-rail .rail-roles),
+    :global(.editorial-rail nav),
+    :global(.editorial-rail .rail-links),
+    :global(.theme-selector),
+    :global(.text-tone-selector) { display: none!important; }
+
+    .mobile-menu-toggle {
+      position: relative;
+      display: grid;
+      width: 40px;
+      height: 40px;
+      margin-left: auto;
+      padding: 0;
+      place-items: center;
+      border: 0;
+      background: transparent;
+      color: var(--color-text-primary);
+      cursor: pointer;
+    }
+    .mobile-menu-toggle span {
+      position: absolute;
+      width: 19px;
+      height: 1px;
+      background: currentColor;
+      transition: transform 180ms ease, top 180ms ease;
+    }
+    .mobile-menu-toggle span:first-child { top: 16px; }
+    .mobile-menu-toggle span:last-child { top: 23px; }
+    .mobile-menu-toggle[aria-expanded="true"] span:first-child { top: 20px; transform: rotate(45deg); }
+    .mobile-menu-toggle[aria-expanded="true"] span:last-child { top: 20px; transform: rotate(-45deg); }
+
+    .mobile-nav-panel {
+      position: fixed;
+      inset: 50px 0 0;
+      z-index: 80;
+      display: block;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border-top: 0;
+      background: rgba(8, 7, 11, .98);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(-8px);
+      transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
+    }
+    :global(html[data-theme="dark"]) .mobile-nav-panel { background: #15111d; }
+    .mobile-nav-panel[aria-hidden="false"] {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: none;
+    }
+    .mobile-nav-inner {
+      width: min(100%, 720px);
+      min-height: 100%;
+      margin: 0 auto;
+      padding: clamp(24px, 6vw, 42px) 20px 36px;
+      display: flex;
+      flex-direction: column;
+    }
+    .mobile-nav-kicker {
+      margin: 0 0 16px;
+      color: var(--color-text-muted);
+      font: .62rem var(--font-mono);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .mobile-nav-links {
+      display: grid;
+      border-top: 1px solid var(--color-border-dim);
+    }
+    .mobile-nav-links a {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 12px;
+      align-items: baseline;
+      padding: 13px 0 12px;
+      border-bottom: 1px solid var(--color-border-dim);
+    }
+    .mobile-nav-links a > span {
+      color: var(--color-text-muted);
+      font: .58rem var(--font-mono);
+      letter-spacing: .08em;
+    }
+    .mobile-nav-links strong {
+      font-family: var(--font-serif);
+      font-size: clamp(1.45rem, 6vw, 2rem);
+      font-weight: 500;
+      line-height: 1;
+      letter-spacing: -.025em;
+    }
+
+    .mobile-ads-entry {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto;
+      gap: 2px 18px;
+      width: 100%;
+      margin: 24px 0 0;
+      padding: 18px 0;
+      border: 0;
+      border-top: 1px solid color-mix(in srgb,var(--color-accent) 60%,transparent);
+      border-bottom: 1px solid color-mix(in srgb,var(--color-accent) 60%,transparent);
+      background: transparent;
+      color: var(--color-accent-bright);
+      text-align: left;
+      cursor: pointer;
+    }
+    .mobile-ads-label {
+      font: .6rem var(--font-mono);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      opacity: .7;
+    }
+    .mobile-ads-entry strong {
+      grid-column: 1;
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 6vw, 2.05rem);
+      font-weight: 500;
+      line-height: 1.05;
+    }
+    .mobile-ads-arrow {
+      grid-column: 2;
+      grid-row: 1 / 3;
+      align-self: center;
+      font-size: 1.3rem;
+      transition: transform 180ms ease;
+    }
+    .mobile-ads-entry:hover .mobile-ads-arrow,
+    .mobile-ads-entry:focus-visible .mobile-ads-arrow { transform: translateX(4px); }
+
+    .mobile-nav-footer {
+      margin-top: auto;
+      padding-top: 28px;
+    }
+    .mobile-profile-links {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .mobile-profile-links a {
+      display: flex;
+      min-width: 0;
+      min-height: 42px;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 8px;
+      border: 1px solid var(--color-border-dim);
+      border-radius: 7px;
+      color: var(--color-text-secondary);
+      font: .62rem var(--font-mono);
+    }
+    .mobile-profile-links :global(svg) { width: 16px; height: 16px; flex: 0 0 auto; }
+
+    .mobile-settings {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 22px;
+      padding-top: 20px;
+      border-top: 1px solid var(--color-border-dim);
+    }
+    .mobile-setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--color-text-muted);
+      font: .62rem var(--font-mono);
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    .mobile-setting-controls {
+      display: flex;
+      gap: 5px;
+    }
+    .mobile-setting-controls button {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      place-items: center;
+      border: 1px solid var(--color-border-dim);
+      border-radius: 50%;
+      background: transparent;
+      color: var(--color-accent);
+      cursor: pointer;
+    }
+    .mobile-setting-controls button[aria-pressed="true"] {
+      border-color: #f4f1eb;
+      background: #f4f1eb;
+      color: #09080b;
+    }
+    .mobile-setting-controls :global(svg) { width: 17px; height: 17px; }
+  }
+
+  @media(max-width:520px){
+    .mobile-settings { grid-template-columns: 1fr; gap: 12px; }
   }
 </style>
