@@ -122,9 +122,13 @@ export function createAntiDeSitterRenderer(canvas:HTMLCanvasElement,scene:Scene)
       const rimStride=tier==="reduced"?2:1;
       for(let i=0;i<96;i+=rimStride){
         const energy=rimStride===1?rim[i]!:(rim[i]!+rim[i+1]!)/2;
-        const strength=1-Math.exp(-energy),angle=i*PERIOD/96;
-        ctx.strokeStyle=ice;ctx.lineWidth=.6+strength;
-        ctx.globalAlpha=alpha*t.collapse*(.05+strength*.7);ctx.shadowColor=ice;ctx.shadowBlur=(2+strength*6)*blur;
+        // Capture bins encode atan2 + PI; decode the same origin. Without
+        // subtracting PI every impact lit the opposite side of the aperture.
+        const strength=1-Math.exp(-energy*1.6),angle=i*PERIOD/96-Math.PI;
+        ctx.strokeStyle=ice;ctx.lineWidth=.85+strength*1.4;
+        // A legible thin resting edge, with brighter localized capture light.
+        // Same arc count and bounded blur in both performance tiers.
+        ctx.globalAlpha=alpha*t.collapse*(.19+strength*.76);ctx.shadowColor=ice;ctx.shadowBlur=(4+strength*6)*blur;
         ctx.beginPath();ctx.arc(0,0,r+1,angle,angle+rimStride*PERIOD/96+.006);ctx.stroke();
       }
       ctx.restore();
