@@ -60,14 +60,6 @@ const { showThemeSelector = true, initialTheme = "dark" } = Astro.props;
       <a href="/#connect"><span>06</span><strong>Contact</strong></a>
     </nav>
 
-    {showThemeSelector && (
-      <button class="mobile-ads-entry" type="button" data-mobile-enter-spacetime>
-        <span class="mobile-ads-label">Enter</span>
-        <strong>Anti-de Sitter space</strong>
-        <span class="mobile-ads-arrow" aria-hidden="true">→</span>
-      </button>
-    )}
-
     <div class="mobile-nav-footer">
       <div class="mobile-profile-links" aria-label="Profile links">
         <a href="https://github.com/DeSitterUniverse" target="_blank" rel="noopener noreferrer"><GithubLogoLight /><span>GitHub</span></a>
@@ -101,6 +93,12 @@ const { showThemeSelector = true, initialTheme = "dark" } = Astro.props;
           </div>
         </div>
       </div>
+
+      {showThemeSelector && (
+        <button class="mobile-ads-entry" type="button" data-mobile-enter-spacetime>
+          enter anti-de sitter space
+        </button>
+      )}
     </div>
   </div>
 </div>
@@ -219,6 +217,7 @@ const { showThemeSelector = true, initialTheme = "dark" } = Astro.props;
 
   @media(prefers-reduced-motion:reduce){
     [data-enter-spacetime],
+    .mobile-ads-entry,
     .mobile-nav-panel,
     .mobile-menu-toggle span {transition:none!important;}
   }
@@ -343,45 +342,6 @@ const { showThemeSelector = true, initialTheme = "dark" } = Astro.props;
       letter-spacing: -.025em;
     }
 
-    .mobile-ads-entry {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      grid-template-rows: auto auto;
-      gap: 2px 18px;
-      width: 100%;
-      margin: 24px 0 0;
-      padding: 18px 0;
-      border: 0;
-      border-top: 1px solid color-mix(in srgb,var(--color-accent) 60%,transparent);
-      border-bottom: 1px solid color-mix(in srgb,var(--color-accent) 60%,transparent);
-      background: transparent;
-      color: var(--color-accent-bright);
-      text-align: left;
-      cursor: pointer;
-    }
-    .mobile-ads-label {
-      font: .6rem var(--font-mono);
-      letter-spacing: .14em;
-      text-transform: uppercase;
-      opacity: .7;
-    }
-    .mobile-ads-entry strong {
-      grid-column: 1;
-      font-family: var(--font-serif);
-      font-size: clamp(1.5rem, 6vw, 2.05rem);
-      font-weight: 500;
-      line-height: 1.05;
-    }
-    .mobile-ads-arrow {
-      grid-column: 2;
-      grid-row: 1 / 3;
-      align-self: center;
-      font-size: 1.3rem;
-      transition: transform 180ms ease;
-    }
-    .mobile-ads-entry:hover .mobile-ads-arrow,
-    .mobile-ads-entry:focus-visible .mobile-ads-arrow { transform: translateX(4px); }
-
     .mobile-nav-footer {
       margin-top: auto;
       padding-top: 28px;
@@ -446,6 +406,28 @@ const { showThemeSelector = true, initialTheme = "dark" } = Astro.props;
       color: #09080b;
     }
     .mobile-setting-controls :global(svg) { width: 17px; height: 17px; }
+
+    .mobile-ads-entry {
+      display: block;
+      width: max-content;
+      max-width: 100%;
+      margin: 24px 0 0;
+      padding: 5px 0;
+      border: 0;
+      background: transparent;
+      color: var(--color-accent-bright);
+      font: .56rem var(--font-mono);
+      letter-spacing: .08em;
+      text-transform: lowercase;
+      opacity: .18;
+      cursor: pointer;
+      transition: opacity 180ms ease, text-shadow 180ms ease;
+    }
+    .mobile-ads-entry:hover,
+    .mobile-ads-entry:focus-visible {
+      opacity: .9;
+      text-shadow: 0 0 10px color-mix(in srgb,var(--color-accent-bright) 35%,transparent);
+    }
   }
 
   @media(max-width:520px){
