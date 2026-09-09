@@ -135,27 +135,57 @@ const socialImageUrl = new URL("/og-image.svg", siteOrigin);
 
         if (!sectionLinks.length) return;
 
+        let currentLink: HTMLAnchorElement | undefined;
         const setActive = (active: HTMLAnchorElement) => {
+          if (active === currentLink) return;
           clearActive();
           active.setAttribute("data-active-section", "true");
           active.setAttribute("aria-current", "location");
+          currentLink = active;
         };
 
-        const observer = new IntersectionObserver((entries) => {
-          const visible = entries
-            .filter((entry) => entry.isIntersecting)
-            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-          if (!visible) return;
-          const match = sectionLinks.find(({ section }) => section === visible.target);
-          if (match) setActive(match.link);
-        }, {
-          rootMargin: "-20% 0px -55% 0px",
-          threshold: [0, 0.05, 0.2, 0.5],
-        });
+        let frame = 0;
+        const updateActiveSection = () => {
+          frame = 0;
 
-        sectionLinks.forEach(({ section }) => observer.observe(section));
+          // Track the section occupying a stable reading line in the upper third
+          // of the viewport. This is deterministic at boundaries and does not
+          // depend on how much of two differently-sized sections intersects.
+          const readingLine = Math.min(260, Math.max(110, window.innerHeight * 0.32));
+          const atPageBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+
+          if (atPageBottom) {
+            setActive(sectionLinks[sectionLinks.length - 1]!.link);
+            return;
+          }
+
+          let active = sectionLinks[0]!;
+          for (const entry of sectionLinks) {
+            const rect = entry.section.getBoundingClientRect();
+            if (rect.top <= readingLine) active = entry;
+            if (rect.top <= readingLine && rect.bottom > readingLine) {
+              active = entry;
+              break;
+            }
+            if (rect.top > readingLine) break;
+          }
+          setActive(active.link);
+        };
+
+        const scheduleUpdate = () => {
+          if (frame) return;
+          frame = window.requestAnimationFrame(updateActiveSection);
+        };
+
+        window.addEventListener("scroll", scheduleUpdate, { passive: true });
+        window.addEventListener("resize", scheduleUpdate);
+        updateActiveSection();
+
         cleanupNavigation = () => {
-          observer.disconnect();
+          if (frame) window.cancelAnimationFrame(frame);
+          window.removeEventListener("scroll", scheduleUpdate);
+          window.removeEventListener("resize", scheduleUpdate);
+          currentLink = undefined;
           clearActive();
         };
       };
