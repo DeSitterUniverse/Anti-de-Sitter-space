@@ -10,12 +10,12 @@ export const skillCategories: SkillCategory[] = [
     items: ["Python", "TypeScript", "JavaScript", "Java", "C#", "C/C++", "SQL", "PowerShell", "Bash", "R"],
   },
   {
-    title: "Data & Cloud",
-    items: ["Azure (ADF, Synapse)", "Snowflake", "Informatica Cloud", "AWS", "GCP", "Elasticsearch", "Oracle / SQL Server", "Qlik Enterprise Manager", "LanceDB", "Databricks", "Snowflake", "SQLite"]
+    title: "Data & Analytics",
+    items: ["Snowflake", "Informatica Cloud", "Elasticsearch", "Oracle / SQL Server", "Qlik Enterprise Manager", "LanceDB", "Databricks", "SQLite", "Data Visualization", "Data Modeling", "Data Governance", "Statistical Analysis", "Tableau / PowerBI", "CDC (Change Data Capture)", "RAG (Retrieval-Augmented Generation)"],
   },
   {
     title: "Backend & Infrastructure",
-    items: ["Node.js", "REST APIs", "FastAPI", "Kubernetes", "ServiceNow", "Docker", "Linux", "CI/CD", "Git"],
+    items: ["Node.js", "REST APIs", "FastAPI", "Azure (ADF, Synapse)", "AWS", "GCP", "Kubernetes", "Docker", "Linux", "CI/CD", "Git"],
   },
   {
     title: "Frontend",
@@ -23,10 +23,6 @@ export const skillCategories: SkillCategory[] = [
   },
   {
     title: "Automation & Tools",
-    items: ["UiPath (RPA)", "Data Pipelines", "ETL/ELT", "Agentic AI", "Kibana", "SMSS/Oracle SQL Developer"],
-  },
-  {
-    title: "Data & Analytics",
-    items: ["Data Visualization", "Data Modeling", "Data Governance", "Statistical Analysis", "Tableau / PowerBI", "CDC (Change Data Capture)", "RAG (Retrieval-Augmented Generation)"],
+    items: ["UiPath (RPA)", "Data Pipelines", "ETL/ELT", "Agentic AI", "Kibana", "ServiceNow", "SSMS / Oracle SQL Developer"],
   },
 ];
