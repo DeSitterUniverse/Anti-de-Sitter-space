@@ -17,7 +17,7 @@ const { Content } = await render(post);
 ---
 
 <MainLayout title={`${post.data.title} — Skye Ibrahim`} description={post.data.description} initialTheme="dark" showThemeSelector={false}>
-  <main class="blog-post">
+  <main id="main-content" class="blog-post" tabindex="-1">
     <article class="editorial-section">
       <a class="back-link" href="/#blog">Back to Blog</a>
       <time datetime={post.data.publishedAt.toISOString()}>
