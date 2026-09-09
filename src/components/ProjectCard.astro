@@ -13,8 +13,9 @@ const descriptionParagraphs = project.description.split("\n\n");
     <p>{project.tech.join(" · ")}</p>
   </div>
   <div class="project-body">
+    <p class="project-summary">{project.summary}</p>
     <details class="editorial-details project-description">
-      <summary>Description</summary>
+      <summary>Details</summary>
       {descriptionParagraphs.map((paragraph) => {
         const linkIndex = project.descriptionLink ? paragraph.indexOf(project.descriptionLink.text) : -1;
         const before = linkIndex >= 0 ? paragraph.slice(0, linkIndex) : paragraph;
@@ -38,3 +39,13 @@ const descriptionParagraphs = project.description.split("\n\n");
     </a>
   </div>
 </article>
+
+<style>
+  .project-summary {
+    max-width: 760px;
+    margin: 0 0 16px;
+    color: var(--color-text-secondary);
+    font-size: .98rem;
+    line-height: 1.6;
+  }
+</style>
