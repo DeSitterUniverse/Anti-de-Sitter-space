@@ -3,6 +3,7 @@ import GithubLogoLight from "phosphor-astro/GithubLogoLight.astro";
 import PlayLight from "phosphor-astro/PlayLight.astro";
 import PauseLight from "phosphor-astro/PauseLight.astro";
 
+const summary = 'Live WebGPU N-body galaxy merger with selectable all-pairs and Barnes-Hut gravity solvers.';
 const description = 'A live galaxy merger where two complete particle systems pull each other apart and reshape themselves in real time. Stellar disks stretch into long tidal tails, invisible halos absorb the impact, compact cores spiral together, and the final remnant emerges from the motion of every simulated body.<br><br>WebGPU keeps the simulation on the graphics card and gives the engine low-level control over memory, parallel work, and rendering. Custom WGSL compute pipelines combine leapfrog integration with selectable exact all-pairs or Barnes-Hut gravity, scaling from detailed comparisons to more than one million interacting particles directly in the browser.';
 ---
 
@@ -12,8 +13,9 @@ const description = 'A live galaxy merger where two complete particle systems pu
     <p>Astro · WebGPU · WGSL · TypeScript</p>
   </div>
   <div class="project-body">
+    <p class="project-summary">{summary}</p>
     <details class="editorial-details project-description">
-      <summary>Description</summary>
+      <summary>Details</summary>
       <p set:html={description}></p>
     </details>
 
@@ -96,3 +98,13 @@ const description = 'A live galaxy merger where two complete particle systems pu
   document.addEventListener("astro:page-load", init);
   document.addEventListener("astro:before-swap", () => window.removeEventListener(THEME_CHANGE_EVENT, onThemeChange));
 </script>
+
+<style>
+  .project-summary {
+    max-width: 760px;
+    margin: 0 0 16px;
+    color: var(--color-text-secondary);
+    font-size: .98rem;
+    line-height: 1.6;
+  }
+</style>
