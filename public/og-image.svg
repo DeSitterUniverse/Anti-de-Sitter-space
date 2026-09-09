@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Skye Ibrahim — Data Engineer & Software Developer</title>
+  <desc id="desc">Dark editorial social preview for Skye Ibrahim's portfolio.</desc>
+  <defs>
+    <radialGradient id="glow" cx="78%" cy="42%" r="58%">
+      <stop offset="0" stop-color="#aa91ba" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#121018" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#121018"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <line x1="76" y1="92" x2="1124" y2="92" stroke="#34303a" stroke-width="1"/>
+  <line x1="76" y1="538" x2="1124" y2="538" stroke="#34303a" stroke-width="1"/>
+  <text x="78" y="154" fill="#8b8690" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22" letter-spacing="4">DATA · SYSTEMS · AUTOMATION</text>
+  <text x="72" y="315" fill="#e9e4da" font-family="Georgia, 'Times New Roman', serif" font-size="112" font-weight="500" letter-spacing="-5">Skye Ibrahim</text>
+  <text x="78" y="385" fill="#b6b0b8" font-family="Arial, Helvetica, sans-serif" font-size="34">Data Engineer &amp; Software Developer</text>
+  <text x="78" y="492" fill="#aa91ba" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" letter-spacing="2">skyeibrahim.vercel.app</text>
+  <g transform="translate(1015 400)" fill="none" stroke="#c9b7d3" stroke-opacity=".22">
+    <ellipse rx="74" ry="26"/>
+    <ellipse rx="52" ry="82" transform="rotate(52)"/>
+    <ellipse rx="52" ry="82" transform="rotate(-52)"/>
+  </g>
+</svg>
