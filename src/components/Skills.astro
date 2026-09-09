@@ -13,10 +13,72 @@ import { skillCategories } from "../data/skills";
         <h3>{category.title}</h3>
         <ul>
           {category.items.map((item) => (
-            <li><span aria-hidden="true"></span>{item}</li>
+            <li>{item}</li>
           ))}
         </ul>
       </section>
     ))}
   </div>
 </section>
+
+<style>
+  .skill-category {
+    grid-template-columns: minmax(175px, .65fr) minmax(0, 2.35fr);
+    gap: clamp(20px, 3vw, 44px);
+    padding: clamp(22px, 2.7vw, 30px) 0;
+  }
+
+  .skill-category ul {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 7px 0;
+  }
+
+  .skill-category li {
+    display: inline-flex;
+    align-items: baseline;
+    min-height: 0;
+    max-width: 100%;
+    gap: 0;
+    font-size: .9rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .skill-category li::after {
+    content: "·";
+    margin: 0 10px;
+    color: var(--color-border);
+  }
+
+  .skill-category li:last-child::after {
+    display: none;
+  }
+
+  .skill-category li:hover {
+    transform: none;
+  }
+
+  @media (max-width: 900px) {
+    .skill-category {
+      grid-template-columns: 1fr;
+      gap: 12px;
+      padding: 22px 0;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .skill-category ul {
+      gap: 6px 0;
+    }
+
+    .skill-category li {
+      font-size: .86rem;
+    }
+
+    .skill-category li::after {
+      margin-inline: 8px;
+    }
+  }
+</style>
