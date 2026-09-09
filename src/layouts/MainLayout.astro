@@ -24,6 +24,10 @@ const {
   initialTheme = "dark",
   showThemeSelector = true,
 } = Astro.props;
+
+const siteOrigin = Astro.site ?? new URL(Astro.url.origin);
+const canonicalUrl = new URL(Astro.url.pathname, siteOrigin);
+const socialImageUrl = new URL("/og-image.svg", siteOrigin);
 ---
 
 <!DOCTYPE html>
@@ -43,11 +47,25 @@ const {
     <meta name="theme-color" content={initialTheme === "dark" ? "#121018" : "#000000"} />
     <meta name="color-scheme" content="dark" />
     <meta name="author" content="Skye Ibrahim" />
+    <link rel="canonical" href={canonicalUrl} />
 
     <!-- Open Graph -->
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Skye Ibrahim" />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content={socialImageUrl} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Skye Ibrahim — Data Engineer & Software Developer" />
+
+    <!-- Social cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImageUrl} />
+    <meta name="twitter:image:alt" content="Skye Ibrahim — Data Engineer & Software Developer" />
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -63,6 +81,7 @@ const {
     <title>{title}</title>
   </head>
   <body class="min-h-screen text-slate-200">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     {showThemeSelector && <StatsMonitor />}
     {showThemeSelector && <ParticleBackground />}
     <Navbar showThemeSelector={showThemeSelector} initialTheme={initialTheme} />
@@ -76,14 +95,150 @@ const {
       import { initializeThemeController } from "../scripts/themeController";
 
       let cleanupTheme: (() => void) | undefined;
+      let cleanupNavigation: (() => void) | undefined;
+
       const initTheme = () => {
         cleanupTheme?.();
         cleanupTheme = initializeThemeController();
       };
 
-      document.addEventListener("DOMContentLoaded", initTheme);
-      document.addEventListener("astro:page-load", initTheme);
-      document.addEventListener("astro:before-swap", () => cleanupTheme?.());
+      const initNavigationState = () => {
+        cleanupNavigation?.();
+
+        const navLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>(".editorial-rail nav a"));
+        const sectionLinks = navLinks
+          .map((link) => {
+            const href = link.getAttribute("href") ?? "";
+            const hashIndex = href.indexOf("#");
+            if (hashIndex < 0 || href.includes("ads-experience")) return null;
+            const id = href.slice(hashIndex + 1);
+            const section = document.getElementById(id);
+            return section ? { link, section } : null;
+          })
+          .filter((entry): entry is { link: HTMLAnchorElement; section: HTMLElement } => entry !== null);
+
+        const clearActive = () => {
+          navLinks.forEach((link) => {
+            link.removeAttribute("data-active-section");
+            link.removeAttribute("aria-current");
+          });
+        };
+
+        if (window.location.pathname.startsWith("/blog")) {
+          clearActive();
+          const blogLink = navLinks.find((link) => link.getAttribute("href") === "/blog/");
+          blogLink?.setAttribute("data-active-section", "true");
+          blogLink?.setAttribute("aria-current", "page");
+          cleanupNavigation = () => clearActive();
+          return;
+        }
+
+        if (!sectionLinks.length) return;
+
+        const setActive = (active: HTMLAnchorElement) => {
+          clearActive();
+          active.setAttribute("data-active-section", "true");
+          active.setAttribute("aria-current", "location");
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+          const visible = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+          if (!visible) return;
+          const match = sectionLinks.find(({ section }) => section === visible.target);
+          if (match) setActive(match.link);
+        }, {
+          rootMargin: "-20% 0px -55% 0px",
+          threshold: [0, 0.05, 0.2, 0.5],
+        });
+
+        sectionLinks.forEach(({ section }) => observer.observe(section));
+        cleanupNavigation = () => {
+          observer.disconnect();
+          clearActive();
+        };
+      };
+
+      const init = () => {
+        initTheme();
+        initNavigationState();
+      };
+
+      document.addEventListener("DOMContentLoaded", init);
+      document.addEventListener("astro:page-load", init);
+      document.addEventListener("astro:before-swap", () => {
+        cleanupTheme?.();
+        cleanupNavigation?.();
+      });
     </script>
+
+    <style is:global>
+      .skip-link {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 200;
+        padding: 8px 11px;
+        border: 1px solid var(--color-accent);
+        background: #0c0b10;
+        color: var(--color-text-primary);
+        font: .68rem var(--font-mono);
+        letter-spacing: .04em;
+        transform: translateY(calc(-100% - 18px));
+        transition: transform 140ms ease;
+      }
+      .skip-link:focus { transform: none; }
+
+      @media (min-width: 901px) {
+        .editorial-rail nav a {
+          position: relative;
+          transition: color 160ms ease, padding-left 160ms ease;
+        }
+        .editorial-rail nav a[data-active-section="true"] {
+          padding-left: 10px;
+          color: var(--color-accent-bright);
+        }
+        .editorial-rail nav a[data-active-section="true"]::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 50%;
+          width: 3px;
+          height: 3px;
+          border-radius: 50%;
+          background: var(--color-accent-bright);
+          transform: translateY(-50%);
+          box-shadow: 0 0 8px var(--color-accent-glow);
+        }
+
+        .theme-selector,
+        .text-tone-selector {
+          border-color: transparent;
+          background: transparent;
+          opacity: .48;
+          transition: opacity 160ms ease, border-color 160ms ease, background-color 160ms ease;
+        }
+        .theme-selector:hover,
+        .theme-selector:focus-within,
+        .text-tone-selector:hover,
+        .text-tone-selector:focus-within {
+          border-color: var(--color-border-dim);
+          background: var(--page-background);
+          opacity: 1;
+        }
+        .theme-selector button,
+        .text-tone-selector button {
+          background: transparent;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .skip-link,
+        .editorial-rail nav a,
+        .theme-selector,
+        .text-tone-selector { transition: none; }
+      }
+    </style>
   </body>
 </html>
